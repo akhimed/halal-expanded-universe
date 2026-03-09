@@ -20,11 +20,13 @@ class RankingProfile:
 
 
 PROFILES: dict[str, RankingProfile] = {
-    "balanced": RankingProfile("balanced", 0.45, 0.35, 0.20),
+    "balanced": RankingProfile("balanced", 0.50, 0.30, 0.20, min_certification=0.40, min_community=0.40),
     "strict": RankingProfile(
-        "strict", 0.60, 0.25, 0.15, min_certification=0.80, min_community=0.60, min_recency=0.50
+        "strict", 0.68, 0.17, 0.15, min_certification=0.80, min_community=0.55, min_recency=0.55
     ),
-    "community_first": RankingProfile("community_first", 0.25, 0.55, 0.20, min_community=0.70),
+    "community_first": RankingProfile(
+        "community_first", 0.22, 0.63, 0.15, min_certification=0.45, min_community=0.75
+    ),
 }
 
 

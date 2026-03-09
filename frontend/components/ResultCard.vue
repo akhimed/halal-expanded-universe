@@ -22,7 +22,7 @@ const emit = defineEmits<{
     <div class="flex items-start justify-between gap-3">
       <div>
         <NuxtLink
-          :to="`/restaurants/${result.restaurant.id}`"
+          :to="{ path: `/restaurants/${result.restaurant.id}`, query: { explanation: result.full_explanation } }"
           class="text-lg font-semibold text-emerald-700 hover:underline"
           @click.stop
         >
