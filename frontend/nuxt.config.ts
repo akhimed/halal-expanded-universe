@@ -1,5 +1,8 @@
 export default defineNuxtConfig({
   devtools: { enabled: true },
+  experimental: {
+    appManifest: false,
+  },
   css: ['maplibre-gl/dist/maplibre-gl.css', '~/assets/css/tailwind.css'],
   modules: ['@nuxtjs/tailwindcss'],
   runtimeConfig: {

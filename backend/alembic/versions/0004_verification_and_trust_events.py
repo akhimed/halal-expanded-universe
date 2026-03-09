@@ -1,6 +1,6 @@
 """add verification documents and trust events
 
-Revision ID: 0004_verification_and_trust_events
+Revision ID: 0004_verif_trust
 Revises: 0003_report_fields
 Create Date: 2026-03-09
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0004_verification_and_trust_events"
+revision = "0004_verif_trust"
 down_revision = "0003_report_fields"
 branch_labels = None
 depends_on = None
