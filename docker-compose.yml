@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: dietary_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dietary_app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-dietary_app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: dietary_backend
+    environment:
+      APP_ENV: development
+      APP_PORT: 8000
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-dietary_app}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-secret-change-me}
+      AUTH_ALGORITHM: ${AUTH_ALGORITHM:-HS256}
+      VERIFICATION_STORAGE_DIR: ${VERIFICATION_STORAGE_DIR:-backend/storage/verification_docs}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: dietary_frontend
+    environment:
+      NUXT_PUBLIC_API_BASE_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
