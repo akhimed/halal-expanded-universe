@@ -1,0 +1,12 @@
+{
+  "name": "dietary-discovery-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0 --port 3000",
+    "build": "nuxt build",
+    "start": "nuxt start"
+  },
+  "dependencies": {
+    "nuxt": "^3.13.1"
+  }
+}
