@@ -11,7 +11,11 @@ const tagOptions = ['halal', 'kosher', 'hindu_vegetarian', 'vegan', 'vegetarian'
 const allergenOptions = ['shellfish', 'nuts', 'dairy', 'gluten', 'soy', 'egg', 'sesame']
 const profileOptions: SearchProfile[] = ['balanced', 'strict', 'community_first']
 
-const locationPlaceholder = ref('Toronto, ON (coming soon)')
+const locationQuery = ref('')
+const locationSearchError = ref('')
+const searchLocationLabel = ref('')
+const useCurrentLocation = ref(false)
+const currentLocation = ref<{ latitude: number; longitude: number } | null>(null)
 const selectedTags = ref<string[]>([])
 const excludedAllergens = ref<string[]>([])
 const profile = ref<SearchProfile>('balanced')
@@ -56,22 +60,57 @@ const removeParticipant = (index: number) => {
 const onSearch = async () => {
   loading.value = true
   errorMessage.value = ''
+  locationSearchError.value = ''
   try {
     const response = await api.searchRestaurants({
       required_tags: selectedTags.value,
       excluded_allergens: excludedAllergens.value,
       profile: profile.value,
       group_mode: groupMode.value,
-      participants: groupMode.value ? participants.value : []
+      participants: groupMode.value ? participants.value : [],
+      location_query: locationQuery.value.trim() || undefined,
+      location_latitude: useCurrentLocation.value ? currentLocation.value?.latitude : undefined,
+      location_longitude: useCurrentLocation.value ? currentLocation.value?.longitude : undefined
     })
     results.value = response.results
     searched.value = true
+    searchLocationLabel.value = response.search_location?.label || ''
     selectedRestaurantId.value = response.results.length > 0 ? response.results[0].restaurant.id : null
   } catch (error) {
-    errorMessage.value = api.humanizeError(error, 'Search failed.')
+    const message = api.humanizeError(error, 'Search failed.')
+    if (message.toLowerCase().includes('location')) {
+      locationSearchError.value = message
+    } else {
+      errorMessage.value = message
+    }
   } finally {
     loading.value = false
   }
+}
+
+
+const detectCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    locationSearchError.value = 'Geolocation is not supported in this browser.'
+    return
+  }
+  locationSearchError.value = ''
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      currentLocation.value = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      }
+      useCurrentLocation.value = true
+      searchLocationLabel.value = 'Using current location'
+    },
+    () => {
+      locationSearchError.value = 'Could not access your current location.'
+      useCurrentLocation.value = false
+      currentLocation.value = null
+    },
+    { timeout: 5000 }
+  )
 }
 
 const onSelectRestaurant = (restaurantId: number) => {
@@ -82,6 +121,10 @@ const clearFilters = () => {
   selectedTags.value = []
   excludedAllergens.value = []
   profile.value = 'balanced'
+  locationQuery.value = ''
+  useCurrentLocation.value = false
+  currentLocation.value = null
+  searchLocationLabel.value = ''
   groupMode.value = false
   participants.value = [
     {
@@ -151,13 +194,20 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
           <button class="text-xs text-slate-500 hover:text-slate-700" @click="clearFilters">Reset</button>
         </div>
 
-        <label class="mt-4 block text-sm font-medium">Location (placeholder)</label>
+        <label class="mt-4 block text-sm font-medium">Location (city or ZIP/postal)</label>
         <input
-          v-model="locationPlaceholder"
+          v-model="locationQuery"
           type="text"
           class="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-          placeholder="City or postal code"
+          placeholder="e.g., Toronto, ON or 10001"
         />
+        <button class="mt-2 w-full rounded-md border px-3 py-1 text-xs hover:bg-slate-100" @click="detectCurrentLocation">
+          Use my current location
+        </button>
+        <p v-if="useCurrentLocation && currentLocation" class="mt-1 text-xs text-slate-500">
+          Current location: {{ currentLocation.latitude.toFixed(4) }}, {{ currentLocation.longitude.toFixed(4) }}
+        </p>
+        <p v-if="locationSearchError" class="mt-1 text-xs text-red-600">{{ locationSearchError }}</p>
 
         <label class="mt-4 flex items-center gap-2 text-sm font-medium">
           <input v-model="groupMode" type="checkbox" class="rounded border" />
@@ -240,7 +290,10 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
 
       <div class="space-y-4 lg:col-span-8 xl:col-span-9">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold">Results</h2>
+          <div>
+            <h2 class="text-lg font-semibold">Results</h2>
+            <p v-if="searchLocationLabel" class="text-xs text-slate-500">Location: {{ searchLocationLabel }}</p>
+          </div>
           <div class="flex items-center gap-2">
             <p v-if="searched && !loading" class="text-sm text-slate-500">{{ results.length }} matches</p>
             <button

@@ -61,14 +61,23 @@ export interface SearchResult {
   matched_tags: string[]
   excluded_allergen_status: ExcludedAllergenStatus[]
   trust_score: number
+  distance_km?: number | null
   group_fit_score?: number | null
   participant_satisfaction: ParticipantSatisfaction[]
   explanation: string
   full_explanation: string
 }
 
+export interface SearchLocation {
+  query: string
+  label: string
+  latitude: number
+  longitude: number
+}
+
 export interface SearchResponse {
   results: SearchResult[]
+  search_location?: SearchLocation | null
 }
 
 export interface RestaurantDetail {

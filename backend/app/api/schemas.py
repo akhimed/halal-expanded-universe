@@ -218,6 +218,9 @@ class SearchRequestSchema(BaseModel):
     profile: SearchProfileLiteral = "balanced"
     group_mode: bool = False
     participants: List[GroupParticipantSchema] = Field(default_factory=list)
+    location_query: str | None = Field(default=None, max_length=200)
+    location_latitude: float | None = None
+    location_longitude: float | None = None
 
 
 class RestaurantSummarySchema(BaseModel):
@@ -249,11 +252,20 @@ class SearchResultSchema(BaseModel):
     matched_tags: List[str]
     excluded_allergen_status: List[ExcludedAllergenStatusSchema]
     trust_score: float
+    distance_km: float | None = None
     group_fit_score: float | None = None
     participant_satisfaction: List[ParticipantSatisfactionSchema] = Field(default_factory=list)
     explanation: str
     full_explanation: str
 
 
+class SearchLocationSchema(BaseModel):
+    query: str
+    label: str
+    latitude: float
+    longitude: float
+
+
 class SearchResponseSchema(BaseModel):
     results: List[SearchResultSchema]
+    search_location: SearchLocationSchema | None = None
