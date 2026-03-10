@@ -71,7 +71,11 @@ make smoke-local
 
 ### Demo accounts
 
-No demo users are auto-created by default. Create users via `POST /auth/register`, then set roles in DB for moderator/admin local testing.
+Running `python -m backend.scripts.seed_dev_data` creates/updates these demo users for local testing:
+- `demo@example.com` (admin)
+- `community_mod@example.com` (moderator)
+
+Default password for both users: `DemoPass123`.
 
 ## Migrations and seed flow
 
@@ -92,7 +96,8 @@ python -m backend.scripts.seed_dev_data
 
 Notes:
 - Run migrations before seeding.
-- Seed script is safe to rerun for local development bootstrapping.
+- Seed script is safe to rerun for local development bootstrapping (idempotent upsert by email/name; no duplicate demo rows).
+- Seed data now includes halal, kosher, vegan, vegetarian, hindu_vegetarian, mixed-concept, and low-trust edge-case listings for realistic local demos.
 
 ## Running tests/checks
 
