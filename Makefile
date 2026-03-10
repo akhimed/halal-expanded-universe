@@ -1,4 +1,4 @@
-.PHONY: test mvp-search mvp-serve backend-dev backend-migrate backend-seed backend-test compose-up compose-down
+.PHONY: test mvp-search mvp-serve backend-dev backend-migrate backend-seed backend-test compose-up compose-down smoke-local
 
 test:
 	python -m unittest discover -s tests -v
@@ -22,7 +22,10 @@ backend-test:
 	pytest backend/tests -q
 
 compose-up:
-	docker compose up --build
+	docker compose up --build -d
 
 compose-down:
 	docker compose down
+
+smoke-local:
+	bash scripts/smoke_local.sh --bootstrap-env
