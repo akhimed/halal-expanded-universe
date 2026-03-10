@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SearchResult } from '~/types/api'
+import { formatDistanceKm } from '~/utils/location'
 
 const props = defineProps<{
   result: SearchResult
@@ -28,13 +29,14 @@ const trustBadgeClass = computed(() => {
     <div class="flex items-start justify-between gap-3">
       <div>
         <NuxtLink
-          :to="{ path: `/restaurants/${result.restaurant.id}`, query: { explanation: result.full_explanation } }"
+          :to="{ path: `/restaurants/${result.restaurant.id}`, query: { explanation: result.full_explanation, distance_km: result.distance_km } }"
           class="text-lg font-semibold text-emerald-700 hover:underline"
           @click.stop
         >
           {{ result.restaurant.name }}
         </NuxtLink>
         <p class="mt-1 text-sm text-slate-600">{{ result.restaurant.address || 'Address unavailable' }}</p>
+        <p v-if="distanceLabel" class="text-xs text-slate-500">{{ distanceLabel }} away</p>
       </div>
       <div class="flex flex-col items-end gap-2">
         <span class="rounded-full px-3 py-1 text-sm font-medium" :class="trustBadgeClass">

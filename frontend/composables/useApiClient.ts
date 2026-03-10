@@ -174,6 +174,9 @@ export const useApiClient = () => {
     profile: SearchProfile
     group_mode?: boolean
     participants?: GroupParticipantInput[]
+    location_query?: string
+    location_latitude?: number
+    location_longitude?: number
   }) => {
     return await $fetch<SearchResponse>(`${baseURL}/search`, {
       method: 'POST',

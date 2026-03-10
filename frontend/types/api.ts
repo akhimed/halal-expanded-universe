@@ -69,8 +69,16 @@ export interface SearchResult {
   full_explanation: string
 }
 
+export interface SearchLocation {
+  query: string
+  label: string
+  latitude: number
+  longitude: number
+}
+
 export interface SearchResponse {
   results: SearchResult[]
+  search_location?: SearchLocation | null
 }
 
 export interface RestaurantDetail {

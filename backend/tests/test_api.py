@@ -31,6 +31,8 @@ def client(tmp_path):
             certification_score=0.95,
             community_verification_score=0.80,
             recency_score=0.55,
+            latitude=43.6510,
+            longitude=-79.3470,
         )
         r1.tags = [RestaurantTag(tag="halal"), RestaurantTag(tag="vegetarian")]
         r1.allergen_info = [RestaurantAllergenInfo(allergen="dairy", present=True)]
@@ -40,6 +42,8 @@ def client(tmp_path):
             certification_score=0.70,
             community_verification_score=0.95,
             recency_score=0.90,
+            latitude=43.7000,
+            longitude=-79.4000,
         )
         r2.tags = [RestaurantTag(tag="vegan"), RestaurantTag(tag="hindu_vegetarian")]
 
@@ -48,6 +52,8 @@ def client(tmp_path):
             certification_score=0.89,
             community_verification_score=0.75,
             recency_score=0.80,
+            latitude=43.9000,
+            longitude=-79.7000,
         )
         r3.tags = [RestaurantTag(tag="vegetarian")]
 
