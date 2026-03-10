@@ -39,6 +39,8 @@ docker compose exec backend alembic -c backend/alembic.ini upgrade head
 docker compose exec backend python -m backend.scripts.seed_dev_data
 ```
 
+Tip: the seed command is idempotent and can be rerun to refresh demo users/restaurants without creating duplicates.
+
 4. Verify endpoints.
 
 ```bash

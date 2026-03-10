@@ -167,11 +167,14 @@ def test_migration_and_seed_smoke(tmp_path: Path):
         env=env,
     )
     subprocess.run(["python", "-m", "backend.scripts.seed_dev_data"], check=True, env=env)
+    subprocess.run(["python", "-m", "backend.scripts.seed_dev_data"], check=True, env=env)
 
     with sqlite3.connect(db_file) as conn:
-        count = conn.execute("select count(*) from restaurants").fetchone()[0]
+        restaurant_count = conn.execute("select count(*) from restaurants").fetchone()[0]
+        user_count = conn.execute("select count(*) from users").fetchone()[0]
 
-    assert count >= 3
+    assert restaurant_count == 10
+    assert user_count == 2
 
 
 def test_group_search_mixed_satisfaction(client: TestClient):
