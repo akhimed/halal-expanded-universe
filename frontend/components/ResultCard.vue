@@ -15,7 +15,7 @@ const emit = defineEmits<{
 
 <template>
   <article
-    class="rounded-lg border bg-white p-4 shadow-sm transition"
+    class="cursor-pointer rounded-lg border bg-white p-4 shadow-sm transition hover:border-emerald-300"
     :class="selected ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-slate-200'"
     @click="emit('select', result.restaurant.id)"
   >
@@ -32,7 +32,7 @@ const emit = defineEmits<{
       </div>
       <div class="flex flex-col items-end gap-2">
         <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
-          Trust {{ result.trust_score }}
+          Trust {{ result.trust_score }}/100
         </span>
         <button
           class="rounded-md border px-2 py-1 text-xs"
@@ -48,10 +48,38 @@ const emit = defineEmits<{
       <span
         v-for="tag in result.matched_tags"
         :key="tag"
-        class="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700"
+        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700"
       >
         {{ tag }}
       </span>
+      <span v-if="result.matched_tags.length === 0" class="text-xs text-slate-500">No required tags matched.</span>
+    </div>
+
+
+    <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+      <div class="rounded-md bg-slate-50 p-2">
+        <p class="text-slate-500">Match tags</p>
+        <p class="font-semibold text-slate-800">{{ result.matched_tags.length }}</p>
+      </div>
+      <div class="rounded-md bg-slate-50 p-2">
+        <p class="text-slate-500">Allergen checks</p>
+        <p class="font-semibold text-slate-800">{{ result.excluded_allergen_status.length }}</p>
+      </div>
+      <div class="rounded-md bg-slate-50 p-2">
+        <p class="text-slate-500">Group fit</p>
+        <p class="font-semibold text-slate-800">
+          {{ result.group_fit_score !== null && result.group_fit_score !== undefined ? result.group_fit_score : '—' }}
+        </p>
+      </div>
+    </div>
+
+    <div v-if="result.excluded_allergen_status.length > 0" class="mt-3 rounded-md border border-slate-200 p-2 text-xs">
+      <p class="font-medium text-slate-700">Allergen compatibility</p>
+      <ul class="mt-1 space-y-1 text-slate-600">
+        <li v-for="item in result.excluded_allergen_status" :key="item.allergen">
+          {{ item.allergen }}: {{ item.present ? 'present (conflict)' : 'not present' }}
+        </li>
+      </ul>
     </div>
 
 
