@@ -61,6 +61,8 @@ export interface SearchResult {
   matched_tags: string[]
   excluded_allergen_status: ExcludedAllergenStatus[]
   trust_score: number
+  trust_level: 'high' | 'medium' | 'low'
+  trust_caveats: string[]
   group_fit_score?: number | null
   participant_satisfaction: ParticipantSatisfaction[]
   explanation: string
@@ -81,7 +83,7 @@ export interface RestaurantDetail {
   certification_score: number
   community_verification_score: number
   recency_score: number
-  trust_breakdown?: Record<string, number>
+  trust_breakdown?: Record<string, number | string | string[]>
   tags: { tag: string }[]
   allergen_info: { allergen: string; present: boolean }[]
 }

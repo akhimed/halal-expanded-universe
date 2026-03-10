@@ -11,6 +11,12 @@ const emit = defineEmits<{
   select: [restaurantId: number]
   toggleFavorite: [restaurant: SearchResult['restaurant']]
 }>()
+
+const trustBadgeClass = computed(() => {
+  if (props.result.trust_level === 'high') return 'bg-emerald-100 text-emerald-800'
+  if (props.result.trust_level === 'medium') return 'bg-amber-100 text-amber-800'
+  return 'bg-rose-100 text-rose-800'
+})
 </script>
 
 <template>
@@ -31,8 +37,8 @@ const emit = defineEmits<{
         <p class="mt-1 text-sm text-slate-600">{{ result.restaurant.address || 'Address unavailable' }}</p>
       </div>
       <div class="flex flex-col items-end gap-2">
-        <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
-          Trust {{ result.trust_score }}/100
+        <span class="rounded-full px-3 py-1 text-sm font-medium" :class="trustBadgeClass">
+          Trust {{ result.trust_score }}/100 · {{ result.trust_level }}
         </span>
         <button
           class="rounded-md border px-2 py-1 text-xs"
@@ -42,6 +48,15 @@ const emit = defineEmits<{
           {{ isFavorited ? 'Saved' : 'Save' }}
         </button>
       </div>
+    </div>
+
+
+
+    <div v-if="result.trust_caveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
+      <p class="font-medium">Trust caveats</p>
+      <ul class="mt-1 list-disc pl-4">
+        <li v-for="caveat in result.trust_caveats" :key="caveat">{{ caveat }}</li>
+      </ul>
     </div>
 
     <div class="mt-3 flex flex-wrap gap-2">

@@ -124,6 +124,7 @@ def test_trust_aware_ranking_and_explanation_presence(client: TestClient):
     assert results[0]["restaurant"]["name"] == "Balanced Bistro"
     assert isinstance(results[0]["explanation"], str) and len(results[0]["explanation"]) > 0
     assert len(results[0]["explanation"]) < len(results[0]["full_explanation"])
+    assert results[0]["trust_level"] in {"high", "medium", "low"}
 
 
 def test_search_response_shape(client: TestClient):
@@ -142,6 +143,8 @@ def test_search_response_shape(client: TestClient):
     assert "matched_tags" in result
     assert "excluded_allergen_status" in result
     assert "trust_score" in result
+    assert "trust_level" in result
+    assert "trust_caveats" in result
     assert "explanation" in result
     assert "full_explanation" in result
 
@@ -283,3 +286,17 @@ def test_group_search_uses_hard_satisfaction_as_tiebreaker(client: TestClient):
     assert results[0]["restaurant"]["name"] == "Halal House"
     assert "Group:" in results[0]["explanation"]
     assert "Group mode:" in results[0]["full_explanation"]
+
+
+def test_trust_explanation_includes_level_and_caveats(client: TestClient):
+    response = client.post(
+        "/search",
+        json={"required_tags": ["vegetarian"], "excluded_allergens": [], "profile": "balanced"},
+    )
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+
+    assert result["trust_level"] in {"high", "medium", "low"}
+    assert any("No moderator-approved owner verification documents" in item for item in result["trust_caveats"])
+    assert "Computed trust score:" in result["full_explanation"]
+    assert "Trust reflects certification, community verification, recency" in result["full_explanation"]

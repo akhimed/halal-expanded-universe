@@ -118,6 +118,32 @@ const closeClaimModal = () => {
   isClaimModalOpen.value = false
 }
 
+
+const trustLevelTone = computed(() => {
+  const level = restaurant.value?.trust_breakdown?.trust_level
+  if (level === 'high') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+  if (level === 'medium') return 'bg-amber-100 text-amber-800 border-amber-200'
+  return 'bg-rose-100 text-rose-800 border-rose-200'
+})
+
+const trustCaveats = computed(() => {
+  const caveats = restaurant.value?.trust_breakdown?.caveats
+  return Array.isArray(caveats) ? caveats : []
+})
+
+const trustRows = computed(() => {
+  const breakdown = restaurant.value?.trust_breakdown
+  if (!breakdown) return []
+  return [
+    { key: 'Base weighted score', value: breakdown.base_score },
+    { key: 'Owner verification submitted', value: breakdown.owner_verification_submitted },
+    { key: 'Moderation approval bonus', value: breakdown.moderation_approval },
+    { key: 'Contradiction penalty', value: breakdown.contradiction_penalty },
+    { key: 'Trust events delta', value: breakdown.event_delta },
+    { key: 'Final trust score', value: breakdown.final_score }
+  ]
+})
+
 const submitClaim = async () => {
   if (!restaurant.value) return
   if (!auth.isAuthenticated.value) {
@@ -215,12 +241,28 @@ const submitClaim = async () => {
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div v-if="restaurant.trust_breakdown" class="rounded-lg border bg-slate-50 p-4">
-          <h2 class="font-semibold">Trust Breakdown</h2>
-          <ul class="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-700 sm:grid-cols-2">
-            <li v-for="(value, key) in restaurant.trust_breakdown" :key="key">
-              <span class="font-medium">{{ key }}:</span> {{ value }}
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-semibold">Trust Breakdown</h2>
+            <span class="rounded-full border px-3 py-1 text-xs font-semibold capitalize" :class="trustLevelTone">
+              {{ restaurant.trust_breakdown.trust_level }} trust
+            </span>
+          </div>
+          <p class="mt-2 text-xs text-slate-600">
+            Trust is deterministic: weighted certification, community verification, and recency, adjusted by verification docs,
+            moderation outcomes, contradiction reports, and trust events.
+          </p>
+          <ul class="mt-3 space-y-1 text-sm text-slate-700">
+            <li v-for="row in trustRows" :key="row.key" class="flex items-center justify-between gap-4 rounded-md bg-white px-2 py-1">
+              <span class="font-medium">{{ row.key }}</span>
+              <span>{{ row.value }}</span>
             </li>
           </ul>
+          <div v-if="trustCaveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <p class="font-semibold">Warnings and caveats</p>
+            <ul class="mt-1 list-disc pl-4">
+              <li v-for="caveat in trustCaveats" :key="caveat">{{ caveat }}</li>
+            </ul>
+          </div>
         </div>
 
         <div>

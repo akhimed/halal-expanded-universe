@@ -249,6 +249,8 @@ class SearchResultSchema(BaseModel):
     matched_tags: List[str]
     excluded_allergen_status: List[ExcludedAllergenStatusSchema]
     trust_score: float
+    trust_level: str
+    trust_caveats: List[str] = Field(default_factory=list)
     group_fit_score: float | None = None
     participant_satisfaction: List[ParticipantSatisfactionSchema] = Field(default_factory=list)
     explanation: str
