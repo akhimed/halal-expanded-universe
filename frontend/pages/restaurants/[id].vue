@@ -12,6 +12,13 @@ const loading = ref(true)
 const errorMessage = ref('')
 const restaurant = ref<RestaurantDetail | null>(null)
 
+const searchExplanation = computed(() => {
+  const value = route.query.explanation
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.length > 0) return value[0]
+  return ''
+})
+
 const isReportModalOpen = ref(false)
 const reportType = ref<ReportType>('outdated_info')
 const reportDescription = ref('')

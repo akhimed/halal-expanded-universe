@@ -16,3 +16,8 @@ def build_explanation(
         f"Excluded allergens clear: {', '.join(safe_allergens) if safe_allergens else 'none'}. "
         f"Computed trust score: {trust_score}."
     )
+
+
+def build_card_explanation(*, profile_name: str, matched_tags: list[str], trust_score: float) -> str:
+    matched_label = ", ".join(matched_tags) if matched_tags else "no required tags"
+    return f"{profile_name}: {matched_label}. Trust {trust_score}."

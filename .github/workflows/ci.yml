@@ -5,18 +5,45 @@ on:
   pull_request:
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: dietary_app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d dietary_app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg2://app:app@localhost:5432/dietary_app
+      AUTH_SECRET_KEY: ci-secret-key
+      AUTH_ALGORITHM: HS256
+      VERIFICATION_STORAGE_DIR: backend/storage/verification_docs
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install backend deps
         run: python -m pip install --upgrade pip && pip install -r backend/requirements.txt
+
+      - name: Run migrations
+        run: alembic -c backend/alembic.ini upgrade head
+
+      - name: Run seed script
+        run: python -m backend.scripts.seed_dev_data
 
       - name: Run backend tests
         run: pytest backend/tests -q
@@ -24,10 +51,20 @@ jobs:
       - name: Run legacy MVP tests
         run: python -m unittest discover -s tests -v
 
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Frontend install and build
-        run: cd frontend && npm ci && npm run build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build

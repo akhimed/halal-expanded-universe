@@ -9,11 +9,13 @@ This repo has two tracks:
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- Docker + Docker Compose plugin
+- Docker Engine/Desktop with Docker Compose plugin
+- Python 3.11+ (for running tests outside containers)
+- Node.js 20+ (for frontend checks outside containers)
 
-### 1) Environment configuration
+### Quick start (fresh clone)
+
+1) Copy env files:
 
 ```bash
 cp .env.example .env
@@ -21,23 +23,44 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-### 2) Run with Docker Compose (recommended)
+2) Build and start services:
 
 ```bash
 docker compose up --build -d
 ```
 
-Run migrations and seed data inside the backend container:
+3) Apply migrations and seed data:
 
 ```bash
 docker compose exec backend alembic -c backend/alembic.ini upgrade head
 docker compose exec backend python -m backend.scripts.seed_dev_data
 ```
 
-Stop stack:
+4) Verify locally:
+
+```bash
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:3000 >/dev/null
+```
+
+5) Stop when done:
 
 ```bash
 docker compose down
+```
+
+### One-command smoke test
+
+Use the smoke script to validate compose startup + backend health + migrations + seed + basic endpoint checks:
+
+```bash
+bash scripts/smoke_local.sh --bootstrap-env
+```
+
+Or via Makefile:
+
+```bash
+make smoke-local
 ```
 
 ### Backend/frontend URLs
@@ -50,7 +73,28 @@ docker compose down
 
 No demo users are auto-created by default. Create users via `POST /auth/register`, then set roles in DB for moderator/admin local testing.
 
-## Running tests
+## Migrations and seed flow
+
+### Docker workflow (recommended)
+
+```bash
+docker compose exec backend alembic -c backend/alembic.ini upgrade head
+docker compose exec backend python -m backend.scripts.seed_dev_data
+```
+
+### Local (non-docker) workflow
+
+```bash
+python -m pip install -r backend/requirements.txt
+alembic -c backend/alembic.ini upgrade head
+python -m backend.scripts.seed_dev_data
+```
+
+Notes:
+- Run migrations before seeding.
+- Seed script is safe to rerun for local development bootstrapping.
+
+## Running tests/checks
 
 ### Full backend API suite
 
@@ -70,13 +114,6 @@ python -m unittest discover -s tests -v
 cd frontend
 npm ci
 npm run build
-```
-
-## Seeding data
-
-```bash
-alembic -c backend/alembic.ini upgrade head
-python -m backend.scripts.seed_dev_data
 ```
 
 ## Legacy MVP (still available)
@@ -163,8 +200,6 @@ curl -s -X POST http://localhost:8000/search \
   -d '{"required_tags": ["vegan", "hindu_vegetarian"], "excluded_allergens": ["shellfish"], "profile": "balanced"}'
 ```
 
-
-
 ### Group matching search
 
 `POST /search` now supports group mode with multiple participant profiles.
@@ -216,7 +251,6 @@ Results include `group_fit_score` and `participant_satisfaction` so each partici
 
 Matching/ranking is deterministic with supported tags (`halal`, `kosher`, `hindu_vegetarian`, `vegan`, `vegetarian`), supported allergens (`shellfish`, `nuts`, `dairy`, `gluten`, `soy`, `egg`, `sesame`), and profiles (`balanced`, `strict`, `community_first`).
 
-
 ### Auth (email/password + roles)
 
 This MVP auth uses **JWT bearer tokens** for simplicity:
@@ -259,153 +293,4 @@ Use bearer token from login/register:
 
 ```bash
 curl -s http://localhost:8000/favorites -H "Authorization: Bearer <token>"
-curl -s -X POST http://localhost:8000/favorites/1 -H "Authorization: Bearer <token>"
-curl -s -X DELETE http://localhost:8000/favorites/1 -H "Authorization: Bearer <token>"
 ```
-
-
-### Reporting inaccurate listings
-
-Authenticated users can submit listing reports with deterministic types:
-- `inaccurate_halal_status`
-- `inaccurate_kosher_status`
-- `allergen_risk`
-- `alcohol_served`
-- `outdated_info`
-- `other`
-
-`description` and `evidence_url` are optional (URL is a placeholder until file uploads are implemented).
-
-```bash
-curl -s -X POST http://localhost:8000/restaurants/1/reports \
-  -H "Authorization: Bearer <token>" \
-  -H 'Content-Type: application/json' \
-  -d '{"report_type":"outdated_info","description":"Hours changed"}'
-```
-
-Each submission creates both a `reports` record and an `audit_logs` entry.
-
-
-### Owner claim flow
-
-Authenticated users can submit a listing ownership claim:
-
-```bash
-curl -s -X POST http://localhost:8000/restaurants/1/claims \
-  -H "Authorization: Bearer <token>" \
-  -H 'Content-Type: application/json' \
-  -d '{"notes":"I am the current manager for this location."}'
-```
-
-Claim statuses are moderation-ready and deterministic:
-- `pending`
-- `approved`
-- `rejected`
-
-Owner dashboard data:
-
-```bash
-curl -s http://localhost:8000/owner/dashboard -H "Authorization: Bearer <token>"
-```
-
-Each claim submission records an `audit_logs` entry with action `submitted`.
-
-
-### Moderation tools (moderator/admin)
-
-Moderators and admins can triage reports and owner claims:
-
-```bash
-curl -s http://localhost:8000/moderation/reports -H "Authorization: Bearer <moderator_or_admin_token>"
-curl -s -X PATCH http://localhost:8000/moderation/reports/1 \
-  -H "Authorization: Bearer <moderator_or_admin_token>" \
-  -H 'Content-Type: application/json' \
-  -d '{"status":"resolved","note":"Verified and fixed"}'
-
-curl -s http://localhost:8000/moderation/owner-claims -H "Authorization: Bearer <moderator_or_admin_token>"
-curl -s -X PATCH http://localhost:8000/moderation/owner-claims/1 \
-  -H "Authorization: Bearer <moderator_or_admin_token>" \
-  -H 'Content-Type: application/json' \
-  -d '{"status":"approved","note":"Ownership docs verified"}'
-```
-
-Each moderation status change records an `audit_logs` entry with action `status_updated`.
-
-
-### Verification documents + trust events
-
-Owners can submit verification document metadata (and optional file upload in local filesystem dev mode):
-
-```bash
-curl -s -X POST http://localhost:8000/owner/claims/1/verification-documents \
-  -H "Authorization: Bearer <token>" \
-  -F document_type=business_license \
-  -F notes='License attached' \
-  -F metadata_filename=license.pdf \
-  -F metadata_mime_type=application/pdf
-```
-
-Moderators/admins can review documents:
-
-```bash
-curl -s http://localhost:8000/moderation/verification-documents -H "Authorization: Bearer <moderator_or_admin_token>"
-curl -s -X PATCH http://localhost:8000/moderation/verification-documents/1 \
-  -H "Authorization: Bearer <moderator_or_admin_token>" \
-  -H 'Content-Type: application/json' \
-  -d '{"status":"approved","note":"Valid docs"}'
-```
-
-Restaurant detail now includes a trust breakdown and trust events can be queried via `/restaurants/{id}/trust-events`.
-
-### Backend tests
-
-```bash
-pytest backend/tests -q
-```
-
-## Developer helpers
-
-```bash
-make test
-make mvp-search
-make backend-migrate
-make backend-seed
-make backend-test
-```
-
-## Planning docs
-
-- `ARCHITECTURE.md`
-- `TODO_ROADMAP.md`
-
-
-## Frontend (Nuxt 3 + Tailwind)
-
-### Run frontend locally
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-### Frontend pages
-
-- `/` — landing + backend health check
-- `/search` — filters + search results
-- `/restaurants/[id]` — detail page
-- `/favorites` — saved places
-- `/owner/dashboard` — owner claim tracking
-- `/admin/dashboard` — moderation queues and status actions
-
-The frontend API client is in `frontend/composables/useApiClient.ts` and uses `NUXT_PUBLIC_API_BASE_URL`.
-
-
-### Map discovery
-
-- `/search` includes MapLibre-based result markers synced with selected result cards.
-- Desktop uses split list/map layout; mobile defaults to list with a map toggle.
-- `/restaurants/[id]` includes a simple location map when coordinates are available.
-- If coordinates are missing, map components show a graceful fallback message.

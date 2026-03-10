@@ -252,6 +252,7 @@ class SearchResultSchema(BaseModel):
     group_fit_score: float | None = None
     participant_satisfaction: List[ParticipantSatisfactionSchema] = Field(default_factory=list)
     explanation: str
+    full_explanation: str
 
 
 class SearchResponseSchema(BaseModel):
