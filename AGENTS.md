@@ -27,6 +27,7 @@ Hard rules:
 - Do not invent fake integrations
 - Update tests for changed behavior
 - Update docs for anything affecting setup/run flow
+- Avoid modifying frontend/pages/restaurants/[id].vue unless required.
 
 PR requirements:
 - Keep changes scoped
