@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { getPostAuthRedirect } from '~/utils/auth'
+
 const api = useApiClient()
 const auth = useAuth()
+const route = useRoute()
+const redirectPath = computed(() => getPostAuthRedirect(route.query.redirect))
 
 auth.hydrate()
 if (auth.isAuthenticated.value) {
-  await navigateTo('/favorites')
+  await navigateTo(redirectPath.value)
 }
 
 const email = ref('')
@@ -18,7 +22,7 @@ const onLogin = async () => {
   try {
     const response = await api.login({ email: email.value, password: password.value })
     auth.setSession(response)
-    await navigateTo('/favorites')
+    await navigateTo(redirectPath.value)
   } catch (error) {
     errorMessage.value = String(error)
   } finally {
