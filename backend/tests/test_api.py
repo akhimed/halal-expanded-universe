@@ -123,6 +123,7 @@ def test_trust_aware_ranking_and_explanation_presence(client: TestClient):
     assert results[0]["trust_score"] >= results[1]["trust_score"]
     assert results[0]["restaurant"]["name"] == "Balanced Bistro"
     assert isinstance(results[0]["explanation"], str) and len(results[0]["explanation"]) > 0
+    assert len(results[0]["explanation"]) < len(results[0]["full_explanation"])
 
 
 def test_search_response_shape(client: TestClient):
@@ -142,6 +143,7 @@ def test_search_response_shape(client: TestClient):
     assert "excluded_allergen_status" in result
     assert "trust_score" in result
     assert "explanation" in result
+    assert "full_explanation" in result
 
 
 def test_migration_and_seed_smoke(tmp_path: Path):
@@ -221,3 +223,63 @@ def test_group_search_combined_ranking_prefers_better_group_fit(client: TestClie
     results = response.json()["results"]
     assert len(results) >= 2
     assert results[0]["group_fit_score"] >= results[1]["group_fit_score"]
+
+
+def test_default_search_without_filters_returns_ranked_results(client: TestClient):
+    response = client.post(
+        "/search",
+        json={"required_tags": [], "excluded_allergens": [], "profile": "balanced"},
+    )
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 3
+    trust_scores = [item["trust_score"] for item in results]
+    assert trust_scores == sorted(trust_scores, reverse=True)
+
+
+def test_profile_refinement_changes_order_for_community_first(client: TestClient):
+    balanced = client.post(
+        "/search",
+        json={"required_tags": [], "excluded_allergens": [], "profile": "balanced"},
+    )
+    community_first = client.post(
+        "/search",
+        json={"required_tags": [], "excluded_allergens": [], "profile": "community_first"},
+    )
+    assert balanced.status_code == 200
+    assert community_first.status_code == 200
+
+    balanced_top = balanced.json()["results"][0]["restaurant"]["name"]
+    community_top = community_first.json()["results"][0]["restaurant"]["name"]
+    assert community_top == "Vegan Valley"
+    assert balanced_top != community_top
+
+
+def test_group_search_uses_hard_satisfaction_as_tiebreaker(client: TestClient):
+    response = client.post(
+        "/search",
+        json={
+            "group_mode": True,
+            "participants": [
+                {
+                    "participant_name": "Hana",
+                    "required_tags": ["halal"],
+                    "excluded_allergens": [],
+                    "profile": "strict",
+                },
+                {
+                    "participant_name": "Rami",
+                    "required_tags": ["vegetarian"],
+                    "excluded_allergens": [],
+                    "profile": "balanced",
+                },
+            ],
+            "profile": "balanced",
+        },
+    )
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) >= 2
+    assert results[0]["restaurant"]["name"] == "Halal House"
+    assert "Group:" in results[0]["explanation"]
+    assert "Group mode:" in results[0]["full_explanation"]

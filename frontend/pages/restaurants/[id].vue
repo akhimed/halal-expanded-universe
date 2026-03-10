@@ -12,6 +12,13 @@ const loading = ref(true)
 const errorMessage = ref('')
 const restaurant = ref<RestaurantDetail | null>(null)
 
+const searchExplanation = computed(() => {
+  const value = route.query.explanation
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.length > 0) return value[0]
+  return ''
+})
+
 const isReportModalOpen = ref(false)
 const reportType = ref<ReportType>('outdated_info')
 const reportDescription = ref('')
@@ -168,6 +175,10 @@ const submitClaim = async () => {
       </div>
 
       <p class="text-slate-700">{{ restaurant.description || 'No description available.' }}</p>
+
+      <div v-if="searchExplanation" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <span class="font-medium">Why this matched:</span> {{ searchExplanation }}
+      </div>
 
       <ClientOnly>
         <RestaurantLocationMap
