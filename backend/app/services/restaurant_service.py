@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from backend.app.models import Restaurant
 from backend.app.services.constants import SUPPORTED_ALLERGENS, SUPPORTED_TAGS
 from backend.app.services.explanation import build_card_explanation, build_explanation
+from backend.app.services.location_service import ResolvedLocation, haversine_km
 from backend.app.services.matching import (
     allergens_present,
     matches_required_tags,
@@ -118,6 +119,7 @@ def search_restaurants(
     profile_name: str,
     group_mode: bool = False,
     participants: list[dict] | list[object] | None = None,
+    location: ResolvedLocation | None = None,
 ) -> list[dict]:
     _validate_inputs(required_tags, excluded_allergens)
     profile = get_profile(profile_name)
@@ -130,6 +132,10 @@ def search_restaurants(
         rest_tags = restaurant_tags(row)
         present_allergens = allergens_present(row)
         score = trust_score(db, row, profile)
+
+        distance_km: float | None = None
+        if location is not None and row.latitude is not None and row.longitude is not None:
+            distance_km = round(haversine_km(location.latitude, location.longitude, row.latitude, row.longitude), 2)
 
         if group_mode and group_participants:
             participant_satisfaction = [_participant_evaluation(row, p) for p in group_participants]
@@ -145,6 +151,9 @@ def search_restaurants(
             ]
 
             combined_rank = round((0.7 * group_fit) + (0.3 * score), 4)
+            if distance_km is not None:
+                distance_factor = max(0.0, 1 - (distance_km / 50.0))
+                combined_rank = round((0.85 * combined_rank) + (0.15 * distance_factor), 4)
             full_explanation = (
                 f"Group mode: {hard_satisfied_count}/{len(group_participants)} participants fully satisfied. "
                 f"Group fit {group_fit}, trust {score}, combined rank {combined_rank}."
@@ -157,6 +166,7 @@ def search_restaurants(
                     "matched_tags": sorted({tag for p in group_participants for tag in (p.required_tags & rest_tags)}),
                     "excluded_allergen_status": excluded_status,
                     "trust_score": score,
+                    "distance_km": distance_km,
                     "group_fit_score": group_fit,
                     "participant_satisfaction": [
                         {
@@ -206,6 +216,9 @@ def search_restaurants(
         )
 
         rank_score = score if not has_constraints else round((0.7 * score) + (0.3 * preference_score), 4)
+        if distance_km is not None:
+            distance_factor = max(0.0, 1 - (distance_km / 50.0))
+            rank_score = round((0.85 * rank_score) + (0.15 * distance_factor), 4)
 
         ranked_candidates.append(
             {
@@ -213,6 +226,7 @@ def search_restaurants(
                 "matched_tags": matched_tags,
                 "excluded_allergen_status": excluded_status,
                 "trust_score": score,
+                "distance_km": distance_km,
                 "group_fit_score": None,
                 "participant_satisfaction": [],
                 "explanation": explanation,

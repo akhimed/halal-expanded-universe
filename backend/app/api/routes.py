@@ -29,6 +29,7 @@ from backend.app.api.schemas import (
     SearchRequestSchema,
     SearchResponseSchema,
     SearchResultSchema,
+    SearchLocationSchema,
     TrustEventResponse,
     TrustEventsListResponse,
     UpdateReportStatusRequest,
@@ -47,6 +48,7 @@ from backend.app.services.moderation_service import (
 )
 from backend.app.services.owner_claim_service import list_owner_claims, submit_owner_claim
 from backend.app.services.report_service import create_report
+from backend.app.services.location_service import ResolvedLocation, resolve_location
 from backend.app.services.restaurant_service import (
     get_restaurant_by_id,
     list_restaurants,
@@ -509,6 +511,17 @@ def restaurant_detail(restaurant_id: int, db: Session = Depends(get_db)) -> Rest
 @router.post("/search", response_model=SearchResponseSchema)
 def search(payload: SearchRequestSchema, db: Session = Depends(get_db)) -> SearchResponseSchema:
     try:
+        search_location: ResolvedLocation | None = None
+        if payload.location_latitude is not None and payload.location_longitude is not None:
+            search_location = ResolvedLocation(
+                query=payload.location_query or "coordinate",
+                label=payload.location_query or "Custom location",
+                latitude=payload.location_latitude,
+                longitude=payload.location_longitude,
+            )
+        elif payload.location_query:
+            search_location = resolve_location(payload.location_query)
+
         results = search_restaurants(
             db,
             required_tags=set(payload.required_tags),
@@ -516,7 +529,16 @@ def search(payload: SearchRequestSchema, db: Session = Depends(get_db)) -> Searc
             profile_name=payload.profile,
             group_mode=payload.group_mode,
             participants=payload.participants,
+            location=search_location,
         )
-        return SearchResponseSchema(results=[SearchResultSchema(**item) for item in results])
+        location_payload = None
+        if search_location is not None:
+            location_payload = SearchLocationSchema(
+                query=search_location.query,
+                label=search_location.label,
+                latitude=search_location.latitude,
+                longitude=search_location.longitude,
+            )
+        return SearchResponseSchema(results=[SearchResultSchema(**item) for item in results], search_location=location_payload)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

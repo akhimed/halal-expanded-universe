@@ -31,6 +31,8 @@ def client(tmp_path):
             certification_score=0.95,
             community_verification_score=0.80,
             recency_score=0.55,
+            latitude=43.6510,
+            longitude=-79.3470,
         )
         r1.tags = [RestaurantTag(tag="halal"), RestaurantTag(tag="vegetarian")]
         r1.allergen_info = [RestaurantAllergenInfo(allergen="dairy", present=True)]
@@ -40,6 +42,8 @@ def client(tmp_path):
             certification_score=0.70,
             community_verification_score=0.95,
             recency_score=0.90,
+            latitude=43.7000,
+            longitude=-79.4000,
         )
         r2.tags = [RestaurantTag(tag="vegan"), RestaurantTag(tag="hindu_vegetarian")]
 
@@ -48,6 +52,8 @@ def client(tmp_path):
             certification_score=0.89,
             community_verification_score=0.75,
             recency_score=0.80,
+            latitude=43.9000,
+            longitude=-79.7000,
         )
         r3.tags = [RestaurantTag(tag="vegetarian")]
 
@@ -283,3 +289,50 @@ def test_group_search_uses_hard_satisfaction_as_tiebreaker(client: TestClient):
     assert results[0]["restaurant"]["name"] == "Halal House"
     assert "Group:" in results[0]["explanation"]
     assert "Group mode:" in results[0]["full_explanation"]
+
+
+def test_search_with_coordinates_adds_distance_and_location_payload(client: TestClient):
+    response = client.post(
+        "/search",
+        json={
+            "required_tags": [],
+            "excluded_allergens": [],
+            "profile": "balanced",
+            "location_query": "Downtown Toronto",
+            "location_latitude": 43.651,
+            "location_longitude": -79.347,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["search_location"]["query"] == "Downtown Toronto"
+    assert payload["search_location"]["latitude"] == 43.651
+
+    results = payload["results"]
+    assert results[0]["restaurant"]["name"] == "Halal House"
+    assert isinstance(results[0]["distance_km"], float)
+    assert results[0]["distance_km"] <= results[-1]["distance_km"]
+
+
+def test_search_with_location_query_uses_geocoder(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from backend.app.api import routes
+
+    monkeypatch.setattr(
+        routes,
+        "resolve_location",
+        lambda query: routes.ResolvedLocation(query=query, label="Mock City", latitude=43.70, longitude=-79.40),
+    )
+
+    response = client.post(
+        "/search",
+        json={
+            "required_tags": [],
+            "excluded_allergens": [],
+            "profile": "balanced",
+            "location_query": "M5V 2T6",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["search_location"]["label"] == "Mock City"
+    assert all("distance_km" in item for item in payload["results"])

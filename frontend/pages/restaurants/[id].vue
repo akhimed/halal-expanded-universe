@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ReportType, RestaurantDetail } from '~/types/api'
+import { formatDistanceKm } from '~/utils/location'
 
 const route = useRoute()
 const api = useApiClient()
@@ -18,6 +19,14 @@ const searchExplanation = computed(() => {
   if (Array.isArray(value) && value.length > 0) return value[0]
   return ''
 })
+
+const searchDistanceKm = computed(() => {
+  const value = route.query.distance_km
+  const parsed = typeof value === 'string' ? Number(value) : Array.isArray(value) ? Number(value[0]) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : null
+})
+
+const searchDistanceLabel = computed(() => formatDistanceKm(searchDistanceKm.value))
 
 const isReportModalOpen = ref(false)
 const reportType = ref<ReportType>('outdated_info')
@@ -189,6 +198,7 @@ const submitClaim = async () => {
       </header>
 
       <p class="text-slate-700">{{ restaurant.description || 'No description available.' }}</p>
+      <p v-if="searchDistanceLabel" class="text-sm text-slate-500">Distance from your search location: {{ searchDistanceLabel }}</p>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div class="rounded-lg border bg-emerald-50 p-3 text-sm">
