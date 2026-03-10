@@ -89,6 +89,15 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
 
     final_score = max(0.0, min(1.0, base + owner_verification_submitted + moderation_approval - contradiction_penalty + event_delta))
 
+    final_score = round(final_score, 4)
+    level = trust_level(final_score)
+    caveats = trust_caveats(
+        recency_score=restaurant.recency_score,
+        contradiction_penalty=contradiction_penalty,
+        approved_docs=approved_docs,
+        final_score=final_score,
+    )
+
     return {
         "base_score": round(base, 4),
         "owner_verification_submitted": owner_verification_submitted,
@@ -96,12 +105,37 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
         "contradiction_penalty": round(contradiction_penalty, 4),
         "event_delta": round(event_delta, 4),
         "recency_component": round(profile.recency_weight * restaurant.recency_score, 4),
-        "final_score": round(final_score, 4),
+        "final_score": final_score,
+        "trust_level": level,
+        "caveats": caveats,
     }
 
 
 def trust_score(db: Session, restaurant: Restaurant, profile: RankingProfile) -> float:
     return trust_breakdown(db, restaurant, profile)["final_score"]
+
+
+def trust_level(score: float) -> str:
+    if score >= 0.8:
+        return "high"
+    if score >= 0.6:
+        return "medium"
+    return "low"
+
+
+def trust_caveats(*, recency_score: float, contradiction_penalty: float, approved_docs: int, final_score: float) -> list[str]:
+    caveats: list[str] = []
+
+    if final_score < 0.6:
+        caveats.append("Low-confidence listing: use caution and verify details before visiting.")
+    if contradiction_penalty > 0:
+        caveats.append("Active contradiction reports are lowering trust while moderators review evidence.")
+    if approved_docs == 0:
+        caveats.append("No moderator-approved owner verification documents are on file yet.")
+    if recency_score < 0.6:
+        caveats.append("Recent verification activity is limited, so details may be outdated.")
+
+    return caveats
 
 
 def meets_profile_minimums(restaurant: Restaurant, profile: RankingProfile) -> bool:

@@ -8,16 +8,28 @@ def build_explanation(
     matched_tags: list[str],
     excluded_allergen_status: list[dict[str, bool]],
     trust_score: float,
+    trust_level: str,
+    trust_caveats: list[str],
 ) -> str:
     safe_allergens = [item["allergen"] for item in excluded_allergen_status if not item["present"]]
+    caveat_text = " ".join(f"Caveat: {item}" for item in trust_caveats) if trust_caveats else ""
     return (
         f"{name} matched required tags ({', '.join(matched_tags) if matched_tags else 'none required'}) "
         f"using the {profile_name} profile. "
         f"Excluded allergens clear: {', '.join(safe_allergens) if safe_allergens else 'none'}. "
-        f"Computed trust score: {trust_score}."
+        f"Computed trust score: {trust_score} ({trust_level}). "
+        f"Trust reflects certification, community verification, recency, moderation approvals, and contradiction reports."
+        f" {caveat_text}".strip()
     )
 
 
-def build_card_explanation(*, profile_name: str, matched_tags: list[str], trust_score: float) -> str:
+def build_card_explanation(
+    *,
+    profile_name: str,
+    matched_tags: list[str],
+    trust_score: float,
+    trust_level: str,
+    trust_caveats: list[str] | None = None,
+) -> str:
     matched_label = ", ".join(matched_tags) if matched_tags else "no required tags"
-    return f"{profile_name}: {matched_label}. Trust {trust_score}."
+    return f"{profile_name}: {matched_label}. Trust {trust_score} ({trust_level})."

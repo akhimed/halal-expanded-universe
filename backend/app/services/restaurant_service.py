@@ -15,7 +15,7 @@ from backend.app.services.matching import (
     passes_allergen_exclusions,
     restaurant_tags,
 )
-from backend.app.services.trust_scoring import get_profile, meets_profile_minimums, trust_score
+from backend.app.services.trust_scoring import get_profile, meets_profile_minimums, trust_breakdown
 
 
 @dataclass
@@ -131,7 +131,10 @@ def search_restaurants(
     for row in list_restaurants(db):
         rest_tags = restaurant_tags(row)
         present_allergens = allergens_present(row)
-        score = trust_score(db, row, profile)
+        trust_data = trust_breakdown(db, row, profile)
+        score = trust_data["final_score"]
+        level = trust_data["trust_level"]
+        caveats = trust_data["caveats"]
 
         distance_km: float | None = None
         if location is not None and row.latitude is not None and row.longitude is not None:
@@ -156,9 +159,9 @@ def search_restaurants(
                 combined_rank = round((0.85 * combined_rank) + (0.15 * distance_factor), 4)
             full_explanation = (
                 f"Group mode: {hard_satisfied_count}/{len(group_participants)} participants fully satisfied. "
-                f"Group fit {group_fit}, trust {score}, combined rank {combined_rank}."
+                f"Group fit {group_fit}, trust {score} ({level}), combined rank {combined_rank}."
             )
-            explanation = f"Group: {hard_satisfied_count}/{len(group_participants)} fully satisfied. Rank {combined_rank}."
+            explanation = f"Group: {hard_satisfied_count}/{len(group_participants)} fully satisfied. Trust {score} ({level}). Rank {combined_rank}."
 
             ranked_candidates.append(
                 {
@@ -182,6 +185,8 @@ def search_restaurants(
                     ],
                     "explanation": explanation,
                     "full_explanation": full_explanation,
+                    "trust_level": level,
+                    "trust_caveats": caveats,
                     "_rank_score": combined_rank,
                     "_hard_satisfied_count": hard_satisfied_count,
                 }
@@ -208,11 +213,15 @@ def search_restaurants(
             matched_tags=matched_tags,
             excluded_allergen_status=excluded_status,
             trust_score=score,
+            trust_level=level,
+            trust_caveats=caveats,
         )
         explanation = build_card_explanation(
             profile_name=profile.name,
             matched_tags=matched_tags,
             trust_score=score,
+            trust_level=level,
+            trust_caveats=caveats,
         )
 
         rank_score = score if not has_constraints else round((0.7 * score) + (0.3 * preference_score), 4)
@@ -231,6 +240,8 @@ def search_restaurants(
                 "participant_satisfaction": [],
                 "explanation": explanation,
                 "full_explanation": full_explanation,
+                "trust_level": level,
+                "trust_caveats": caveats,
                 "_rank_score": rank_score,
             }
         )

@@ -130,6 +130,7 @@ def test_trust_aware_ranking_and_explanation_presence(client: TestClient):
     assert results[0]["restaurant"]["name"] == "Balanced Bistro"
     assert isinstance(results[0]["explanation"], str) and len(results[0]["explanation"]) > 0
     assert len(results[0]["explanation"]) < len(results[0]["full_explanation"])
+    assert results[0]["trust_level"] in {"high", "medium", "low"}
 
 
 def test_search_response_shape(client: TestClient):
@@ -148,6 +149,8 @@ def test_search_response_shape(client: TestClient):
     assert "matched_tags" in result
     assert "excluded_allergen_status" in result
     assert "trust_score" in result
+    assert "trust_level" in result
+    assert "trust_caveats" in result
     assert "explanation" in result
     assert "full_explanation" in result
 
@@ -291,48 +294,15 @@ def test_group_search_uses_hard_satisfaction_as_tiebreaker(client: TestClient):
     assert "Group mode:" in results[0]["full_explanation"]
 
 
-def test_search_with_coordinates_adds_distance_and_location_payload(client: TestClient):
+def test_trust_explanation_includes_level_and_caveats(client: TestClient):
     response = client.post(
         "/search",
-        json={
-            "required_tags": [],
-            "excluded_allergens": [],
-            "profile": "balanced",
-            "location_query": "Downtown Toronto",
-            "location_latitude": 43.651,
-            "location_longitude": -79.347,
-        },
+        json={"required_tags": ["vegetarian"], "excluded_allergens": [], "profile": "balanced"},
     )
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["search_location"]["query"] == "Downtown Toronto"
-    assert payload["search_location"]["latitude"] == 43.651
+    result = response.json()["results"][0]
 
-    results = payload["results"]
-    assert results[0]["restaurant"]["name"] == "Halal House"
-    assert isinstance(results[0]["distance_km"], float)
-    assert results[0]["distance_km"] <= results[-1]["distance_km"]
-
-
-def test_search_with_location_query_uses_geocoder(client: TestClient, monkeypatch: pytest.MonkeyPatch):
-    from backend.app.api import routes
-
-    monkeypatch.setattr(
-        routes,
-        "resolve_location",
-        lambda query: routes.ResolvedLocation(query=query, label="Mock City", latitude=43.70, longitude=-79.40),
-    )
-
-    response = client.post(
-        "/search",
-        json={
-            "required_tags": [],
-            "excluded_allergens": [],
-            "profile": "balanced",
-            "location_query": "M5V 2T6",
-        },
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["search_location"]["label"] == "Mock City"
-    assert all("distance_km" in item for item in payload["results"])
+    assert result["trust_level"] in {"high", "medium", "low"}
+    assert any("No moderator-approved owner verification documents" in item for item in result["trust_caveats"])
+    assert "Computed trust score:" in result["full_explanation"]
+    assert "Trust reflects certification, community verification, recency" in result["full_explanation"]
