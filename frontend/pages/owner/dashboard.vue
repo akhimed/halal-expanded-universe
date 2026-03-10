@@ -16,6 +16,7 @@ const errorMessage = ref('')
 const claims = ref<OwnerDashboardClaim[]>([])
 const documents = ref<VerificationDocument[]>([])
 const actionMessage = ref('')
+const selectedStatus = ref<'all' | 'pending' | 'approved' | 'rejected'>('all')
 
 const formByClaim = ref<Record<number, { document_type: string; notes: string; metadata_filename: string; metadata_mime_type: string }>>({})
 
@@ -73,6 +74,28 @@ const statusClass = (status: string) => {
   if (status === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200'
   return 'bg-amber-50 text-amber-700 border-amber-200'
 }
+
+const claimsByStatus = computed(() => ({
+  pending: claims.value.filter((claim) => claim.status === 'pending').length,
+  approved: claims.value.filter((claim) => claim.status === 'approved').length,
+  rejected: claims.value.filter((claim) => claim.status === 'rejected').length
+}))
+
+const filteredClaims = computed(() => {
+  if (selectedStatus.value === 'all') return claims.value
+  return claims.value.filter((claim) => claim.status === selectedStatus.value)
+})
+
+const docsByClaim = computed(() => {
+  const grouped: Record<number, VerificationDocument[]> = {}
+  documents.value.forEach((doc) => {
+    if (!grouped[doc.owner_claim_id]) grouped[doc.owner_claim_id] = []
+    grouped[doc.owner_claim_id].push(doc)
+  })
+  return grouped
+})
+
+const formatDate = (value: string) => new Date(value).toLocaleString()
 </script>
 
 <template>
@@ -81,6 +104,25 @@ const statusClass = (status: string) => {
       <h1 class="text-2xl font-bold">Owner Dashboard</h1>
       <p class="mt-2 text-slate-600">Track ownership claims and submit verification metadata/documents.</p>
       <p class="mt-1 text-sm text-slate-500">Signed in as: {{ auth.user?.display_name }} ({{ auth.user?.role }})</p>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-4">
+        <div class="rounded-lg border bg-slate-50 p-3">
+          <p class="text-xs uppercase text-slate-500">Total claims</p>
+          <p class="text-xl font-semibold">{{ claims.length }}</p>
+        </div>
+        <div class="rounded-lg border bg-amber-50 p-3">
+          <p class="text-xs uppercase text-amber-700">Pending</p>
+          <p class="text-xl font-semibold text-amber-800">{{ claimsByStatus.pending }}</p>
+        </div>
+        <div class="rounded-lg border bg-emerald-50 p-3">
+          <p class="text-xs uppercase text-emerald-700">Approved</p>
+          <p class="text-xl font-semibold text-emerald-800">{{ claimsByStatus.approved }}</p>
+        </div>
+        <div class="rounded-lg border bg-rose-50 p-3">
+          <p class="text-xs uppercase text-rose-700">Rejected</p>
+          <p class="text-xl font-semibold text-rose-800">{{ claimsByStatus.rejected }}</p>
+        </div>
+      </div>
     </div>
 
     <div v-if="loading" class="rounded-lg border bg-white p-6 text-sm text-slate-600">Loading owner dashboard...</div>
@@ -90,21 +132,43 @@ const statusClass = (status: string) => {
       <p v-if="actionMessage" class="rounded-lg border bg-white p-3 text-sm text-slate-700">{{ actionMessage }}</p>
 
       <section class="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 class="mb-3 text-lg font-semibold">Your Claims</h2>
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-lg font-semibold">Your Claims</h2>
+          <select v-model="selectedStatus" class="rounded-md border px-2 py-1 text-sm">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
         <div v-if="claims.length === 0" class="text-sm text-slate-600">
           No owner claims yet. Open a restaurant detail page and click <span class="font-semibold">Claim this listing</span>.
         </div>
 
+        <div v-else-if="filteredClaims.length === 0" class="text-sm text-slate-600">No claims match this status.</div>
+
         <div v-else class="space-y-4">
-          <article v-for="claim in claims" :key="claim.id" class="rounded-lg border p-4">
+          <article v-for="claim in filteredClaims" :key="claim.id" class="rounded-lg border p-4">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <NuxtLink :to="`/restaurants/${claim.restaurant.id}`" class="font-semibold text-emerald-700 hover:underline">
                   {{ claim.restaurant.name }}
                 </NuxtLink>
                 <p class="text-xs text-slate-500">Claim #{{ claim.id }} · {{ claim.restaurant.address || 'Address unavailable' }}</p>
+                <p class="text-xs text-slate-500">Submitted: {{ formatDate(claim.created_at) }}</p>
               </div>
               <span class="rounded-full border px-2 py-1 text-xs" :class="statusClass(claim.status)">{{ claim.status }}</span>
+            </div>
+
+            <p v-if="claim.notes" class="mt-2 text-sm text-slate-700">Your note: {{ claim.notes }}</p>
+
+            <div v-if="docsByClaim[claim.id]?.length" class="mt-3 rounded-md border bg-slate-50 p-3">
+              <p class="mb-2 text-sm font-medium">Submitted verification documents</p>
+              <ul class="space-y-1 text-sm text-slate-700">
+                <li v-for="doc in docsByClaim[claim.id]" :key="doc.id">
+                  #{{ doc.id }} · {{ doc.document_type }} · <span class="font-medium">{{ doc.status }}</span>
+                </li>
+              </ul>
             </div>
 
             <div class="mt-3 rounded-md bg-slate-50 p-3">

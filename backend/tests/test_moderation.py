@@ -143,8 +143,10 @@ def test_moderator_can_list_and_update_report_and_claim_with_audit(client_and_se
         audit_entries = db.scalars(select(AuditLog).where(AuditLog.action == "status_updated").order_by(AuditLog.id)).all()
         assert len(audit_entries) >= 2
         payloads = [json.loads(item.metadata_json or "{}") for item in audit_entries]
-        assert any(p.get("new_status") == "resolved" for p in payloads)
-        assert any(p.get("new_status") == "approved" for p in payloads)
+        assert any(p.get("new_status") == "resolved" and p.get("note") == "Verified update" for p in payloads)
+        assert any(p.get("new_status") == "approved" and p.get("note") == "Ownership confirmed" for p in payloads)
+        assert any(item.entity_type == "report" for item in audit_entries)
+        assert any(item.entity_type == "owner_claim" for item in audit_entries)
 
 
 def test_admin_can_moderate(client_and_session):
@@ -175,3 +177,43 @@ def test_admin_can_moderate(client_and_session):
     )
     assert update.status_code == 200
     assert update.json()["status"] == "under_review"
+
+
+def test_report_moderation_writes_audit_log_with_note(client_and_session):
+    client, SessionLocal = client_and_session
+
+    from backend.app.models import Restaurant
+
+    with SessionLocal() as db:
+        db.add(Restaurant(name="Audit Place", certification_score=0.8, community_verification_score=0.8, recency_score=0.8))
+        db.commit()
+
+    reporter_token = _register(client, email="audit-reporter@example.com")
+    moderator_token = _register(client, email="audit-mod@example.com")
+    _set_role(SessionLocal, "audit-mod@example.com", "moderator")
+
+    report_resp = client.post(
+        "/restaurants/1/reports",
+        headers={"Authorization": f"Bearer {reporter_token}"},
+        json={"report_type": "outdated_info", "description": "hours changed"},
+    )
+    assert report_resp.status_code == 200
+    report_id = report_resp.json()["id"]
+
+    update = client.patch(
+        f"/moderation/reports/{report_id}",
+        headers={"Authorization": f"Bearer {moderator_token}"},
+        json={"status": "under_review", "note": "triage started"},
+    )
+    assert update.status_code == 200
+
+    with SessionLocal() as db:
+        audit = db.scalars(
+            select(AuditLog)
+            .where(AuditLog.entity_type == "report", AuditLog.entity_id == str(report_id), AuditLog.action == "status_updated")
+            .order_by(AuditLog.id.desc())
+        ).first()
+        assert audit is not None
+        metadata = json.loads(audit.metadata_json or "{}")
+        assert metadata["new_status"] == "under_review"
+        assert metadata["note"] == "triage started"
