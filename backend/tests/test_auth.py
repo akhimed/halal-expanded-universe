@@ -79,6 +79,11 @@ def test_current_user_requires_auth(client: TestClient):
     assert response.status_code == 401
 
 
+def test_current_user_invalid_token_rejected(client: TestClient):
+    response = client.get("/auth/me", headers={"Authorization": "Bearer invalid-token"})
+    assert response.status_code == 401
+
+
 def test_auth_rate_limit_enforced(client: TestClient):
     last_response = None
     for _ in range(21):

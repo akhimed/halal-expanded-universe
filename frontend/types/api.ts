@@ -64,6 +64,7 @@ export interface SearchResult {
   group_fit_score?: number | null
   participant_satisfaction: ParticipantSatisfaction[]
   explanation: string
+  full_explanation: string
 }
 
 export interface SearchResponse {

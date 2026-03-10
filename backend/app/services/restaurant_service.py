@@ -7,14 +7,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models import Restaurant
 from backend.app.services.constants import SUPPORTED_ALLERGENS, SUPPORTED_TAGS
-from backend.app.services.explanation import build_explanation
+from backend.app.services.explanation import build_card_explanation, build_explanation
 from backend.app.services.matching import (
     allergens_present,
     matches_required_tags,
     passes_allergen_exclusions,
     restaurant_tags,
 )
-from backend.app.services.ranking import rank_by_trust
 from backend.app.services.trust_scoring import get_profile, meets_profile_minimums, trust_score
 
 
@@ -124,20 +123,20 @@ def search_restaurants(
     profile = get_profile(profile_name)
 
     group_participants = _normalize_participants(participants or []) if group_mode else []
+    has_constraints = bool(required_tags or excluded_allergens)
 
     ranked_candidates: list[dict] = []
     for row in list_restaurants(db):
         rest_tags = restaurant_tags(row)
         present_allergens = allergens_present(row)
-
         score = trust_score(db, row, profile)
 
         if group_mode and group_participants:
             participant_satisfaction = [_participant_evaluation(row, p) for p in group_participants]
             group_fit = round(sum(item["participant_fit_score"] for item in participant_satisfaction) / len(participant_satisfaction), 4)
             hard_satisfied_count = sum(1 for item in participant_satisfaction if item["hard_satisfied"])
-
-            if group_fit <= 0:
+            no_one_satisfied = hard_satisfied_count == 0 and all(item["participant_fit_score"] < 0.45 for item in participant_satisfaction)
+            if no_one_satisfied:
                 continue
 
             excluded_status = [
@@ -145,11 +144,12 @@ def search_restaurants(
                 for allergen in sorted({a for p in group_participants for a in p.excluded_allergens})
             ]
 
-            combined_rank = round((0.65 * group_fit) + (0.35 * score), 4)
-            explanation = (
+            combined_rank = round((0.7 * group_fit) + (0.3 * score), 4)
+            full_explanation = (
                 f"Group mode: {hard_satisfied_count}/{len(group_participants)} participants fully satisfied. "
                 f"Group fit {group_fit}, trust {score}, combined rank {combined_rank}."
             )
+            explanation = f"Group: {hard_satisfied_count}/{len(group_participants)} fully satisfied. Rank {combined_rank}."
 
             ranked_candidates.append(
                 {
@@ -171,35 +171,41 @@ def search_restaurants(
                         for item in participant_satisfaction
                     ],
                     "explanation": explanation,
+                    "full_explanation": full_explanation,
                     "_rank_score": combined_rank,
+                    "_hard_satisfied_count": hard_satisfied_count,
                 }
             )
             continue
 
-        tag_match, _missing = matches_required_tags(row, required_tags)
-        if not tag_match:
+        tag_match, missing = matches_required_tags(row, required_tags)
+        allergen_ok, conflicts = passes_allergen_exclusions(row, excluded_allergens)
+        profile_ok = meets_profile_minimums(row, profile)
+
+        if has_constraints and (not tag_match or not allergen_ok or not profile_ok):
             continue
 
-        allergen_ok, _conflicts = passes_allergen_exclusions(row, excluded_allergens)
-        if not allergen_ok:
-            continue
-
-        if not meets_profile_minimums(row, profile):
-            continue
+        match_ratio = 1.0 if len(required_tags) == 0 else (len(required_tags) - len(missing)) / len(required_tags)
+        allergen_ratio = 1.0 if len(excluded_allergens) == 0 else 1 - (len(conflicts) / len(excluded_allergens))
+        preference_score = round((0.65 * match_ratio) + (0.35 * allergen_ratio), 4)
 
         matched_tags = sorted(required_tags & rest_tags)
-        excluded_status = [
-            {"allergen": allergen, "present": allergen in present_allergens}
-            for allergen in sorted(excluded_allergens)
-        ]
+        excluded_status = [{"allergen": allergen, "present": allergen in present_allergens} for allergen in sorted(excluded_allergens)]
 
-        explanation = build_explanation(
+        full_explanation = build_explanation(
             name=row.name,
             profile_name=profile.name,
             matched_tags=matched_tags,
             excluded_allergen_status=excluded_status,
             trust_score=score,
         )
+        explanation = build_card_explanation(
+            profile_name=profile.name,
+            matched_tags=matched_tags,
+            trust_score=score,
+        )
+
+        rank_score = score if not has_constraints else round((0.7 * score) + (0.3 * preference_score), 4)
 
         ranked_candidates.append(
             {
@@ -210,10 +216,16 @@ def search_restaurants(
                 "group_fit_score": None,
                 "participant_satisfaction": [],
                 "explanation": explanation,
+                "full_explanation": full_explanation,
+                "_rank_score": rank_score,
             }
         )
 
     if group_mode and group_participants:
-        return sorted(ranked_candidates, key=lambda item: item.get("_rank_score", 0), reverse=True)
+        return sorted(
+            ranked_candidates,
+            key=lambda item: (item.get("_rank_score", 0), item.get("_hard_satisfied_count", 0), item["trust_score"]),
+            reverse=True,
+        )
 
-    return rank_by_trust(ranked_candidates)
+    return sorted(ranked_candidates, key=lambda item: item.get("_rank_score", item["trust_score"]), reverse=True)

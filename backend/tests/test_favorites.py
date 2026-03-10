@@ -75,3 +75,26 @@ def test_add_list_remove_favorite_flow(client: TestClient):
 def test_favorites_requires_auth(client: TestClient):
     response = client.get("/favorites")
     assert response.status_code == 401
+
+
+def test_adding_same_favorite_is_idempotent(client: TestClient):
+    token = _register_and_token(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first = client.post("/favorites/1", headers=headers)
+    assert first.status_code == 200
+
+    second = client.post("/favorites/1", headers=headers)
+    assert second.status_code == 200
+
+    listed = client.get("/favorites", headers=headers)
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["favorites"]] == [1]
+
+
+def test_remove_missing_favorite_returns_404(client: TestClient):
+    token = _register_and_token(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.delete("/favorites/2", headers=headers)
+    assert response.status_code == 404
