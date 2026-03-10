@@ -113,6 +113,7 @@ python -m unittest discover -s tests -v
 ```bash
 cd frontend
 npm ci
+npm run test
 npm run build
 ```
 
