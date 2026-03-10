@@ -31,7 +31,9 @@ const claimNotes = ref('')
 const claimSubmitting = ref(false)
 const claimFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
-onMounted(async () => {
+const loadRestaurant = async () => {
+  loading.value = true
+  errorMessage.value = ''
   try {
     const id = Number(route.params.id)
     restaurant.value = await api.getRestaurantById(id)
@@ -39,11 +41,13 @@ onMounted(async () => {
       await favorites.refreshFavorites()
     }
   } catch (error) {
-    errorMessage.value = String(error)
+    errorMessage.value = api.humanizeError(error, 'Unable to load restaurant details.')
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadRestaurant)
 
 const toggleFavorite = async () => {
   if (!restaurant.value) return
@@ -142,16 +146,26 @@ const submitClaim = async () => {
 
 <template>
   <section>
-    <div v-if="loading" class="rounded-lg border bg-white p-6 text-sm text-slate-600">Loading restaurant...</div>
-    <div v-else-if="errorMessage" class="rounded-lg border bg-white p-6 text-sm text-red-600">{{ errorMessage }}</div>
+    <div v-if="loading" class="rounded-lg border bg-white p-6 text-sm text-slate-600 shadow-sm">
+      <p class="font-medium">Loading restaurant...</p>
+      <p class="mt-1 text-xs text-slate-500">Preparing trust and verification details.</p>
+    </div>
 
-    <article v-else-if="restaurant" class="space-y-4 rounded-xl border bg-white p-6 shadow-sm">
-      <div class="flex items-start justify-between gap-4">
+    <div v-else-if="errorMessage" class="rounded-lg border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+      <p class="font-medium">Could not load this restaurant.</p>
+      <p class="mt-1">{{ errorMessage }}</p>
+      <button class="mt-4 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium" @click="loadRestaurant">
+        Retry
+      </button>
+    </div>
+
+    <article v-else-if="restaurant" class="space-y-6 rounded-xl border bg-white p-4 shadow-sm sm:p-6">
+      <header class="flex flex-col gap-3 border-b pb-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 class="text-2xl font-bold">{{ restaurant.name }}</h1>
           <p class="text-sm text-slate-600">{{ restaurant.address || 'Address unavailable' }}</p>
         </div>
-        <div class="flex flex-wrap items-center justify-end gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <button
             class="rounded-md border px-3 py-1 text-xs"
             :class="favorites.isFavorited(restaurant.id) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-100'"
@@ -172,12 +186,23 @@ const submitClaim = async () => {
             Report listing
           </button>
         </div>
-      </div>
+      </header>
 
       <p class="text-slate-700">{{ restaurant.description || 'No description available.' }}</p>
 
-      <div v-if="searchExplanation" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-        <span class="font-medium">Why this matched:</span> {{ searchExplanation }}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="rounded-lg border bg-emerald-50 p-3 text-sm">
+          <p class="text-xs text-emerald-700">Certification trust</p>
+          <p class="text-lg font-semibold text-emerald-900">{{ restaurant.certification_score }}</p>
+        </div>
+        <div class="rounded-lg border bg-indigo-50 p-3 text-sm">
+          <p class="text-xs text-indigo-700">Community verification</p>
+          <p class="text-lg font-semibold text-indigo-900">{{ restaurant.community_verification_score }}</p>
+        </div>
+        <div class="rounded-lg border bg-amber-50 p-3 text-sm">
+          <p class="text-xs text-amber-700">Recency</p>
+          <p class="text-lg font-semibold text-amber-900">{{ restaurant.recency_score }}</p>
+        </div>
       </div>
 
       <ClientOnly>
@@ -188,40 +213,39 @@ const submitClaim = async () => {
         />
       </ClientOnly>
 
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div class="rounded-lg bg-slate-50 p-3 text-sm">Certification: {{ restaurant.certification_score }}</div>
-        <div class="rounded-lg bg-slate-50 p-3 text-sm">Community: {{ restaurant.community_verification_score }}</div>
-        <div class="rounded-lg bg-slate-50 p-3 text-sm">Recency: {{ restaurant.recency_score }}</div>
-      </div>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div v-if="restaurant.trust_breakdown" class="rounded-lg border bg-slate-50 p-4">
+          <h2 class="font-semibold">Trust Breakdown</h2>
+          <ul class="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-700 sm:grid-cols-2">
+            <li v-for="(value, key) in restaurant.trust_breakdown" :key="key">
+              <span class="font-medium">{{ key }}:</span> {{ value }}
+            </li>
+          </ul>
+        </div>
 
+        <div>
+          <h2 class="font-semibold">Tags</h2>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span v-for="tag in restaurant.tags" :key="tag.tag" class="rounded-full bg-emerald-100 px-2 py-1 text-xs">
+              {{ tag.tag }}
+            </span>
+            <span v-if="restaurant.tags.length === 0" class="text-sm text-slate-500">No tags available.</span>
+          </div>
 
-      <div v-if="restaurant.trust_breakdown" class="rounded-lg border bg-slate-50 p-4">
-        <h2 class="font-semibold">Trust Breakdown</h2>
-        <ul class="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-700 md:grid-cols-2">
-          <li v-for="(value, key) in restaurant.trust_breakdown" :key="key">
-            <span class="font-medium">{{ key }}:</span> {{ value }}
-          </li>
-        </ul>
-      </div>
-
-      <div>
-        <h2 class="font-semibold">Tags</h2>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <span v-for="tag in restaurant.tags" :key="tag.tag" class="rounded-full bg-emerald-100 px-2 py-1 text-xs">
-            {{ tag.tag }}
-          </span>
+          <h2 class="mt-4 font-semibold">Allergen Info</h2>
+          <ul class="mt-2 space-y-1 text-sm text-slate-700">
+            <li v-for="item in restaurant.allergen_info" :key="item.allergen">
+              {{ item.allergen }}: {{ item.present ? 'present' : 'not present' }}
+            </li>
+            <li v-if="restaurant.allergen_info.length === 0" class="text-slate-500">No allergen details yet.</li>
+          </ul>
         </div>
       </div>
-
-      <div>
-        <h2 class="font-semibold">Allergen Info</h2>
-        <ul class="mt-2 space-y-1 text-sm text-slate-700">
-          <li v-for="item in restaurant.allergen_info" :key="item.allergen">
-            {{ item.allergen }}: {{ item.present ? 'present' : 'not present' }}
-          </li>
-        </ul>
-      </div>
     </article>
+
+    <div v-else class="rounded-lg border bg-white p-6 text-sm text-slate-600 shadow-sm">
+      Restaurant not found.
+    </div>
 
     <div v-if="isClaimModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">

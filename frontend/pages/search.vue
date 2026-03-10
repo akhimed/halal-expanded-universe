@@ -21,6 +21,7 @@ const results = ref<SearchResult[]>([])
 const searched = ref(false)
 const selectedRestaurantId = ref<number | null>(null)
 const mobileShowMap = ref(false)
+const resultsListRef = ref<HTMLElement | null>(null)
 
 const groupMode = ref(false)
 const participants = ref<GroupParticipantInput[]>([
@@ -77,6 +78,44 @@ const onSelectRestaurant = (restaurantId: number) => {
   selectedRestaurantId.value = restaurantId
 }
 
+const clearFilters = () => {
+  selectedTags.value = []
+  excludedAllergens.value = []
+  profile.value = 'balanced'
+  groupMode.value = false
+  participants.value = [
+    {
+      participant_name: 'Participant 1',
+      required_tags: [],
+      excluded_allergens: [],
+      profile: 'balanced'
+    }
+  ]
+}
+
+const quickFillStrictHalal = () => {
+  groupMode.value = false
+  selectedTags.value = ['halal']
+  excludedAllergens.value = []
+  profile.value = 'strict'
+}
+
+const quickFillVeganSafe = () => {
+  groupMode.value = false
+  selectedTags.value = ['vegan']
+  excludedAllergens.value = ['dairy', 'egg']
+  profile.value = 'balanced'
+}
+
+watch(selectedRestaurantId, async (restaurantId) => {
+  if (!restaurantId) {
+    return
+  }
+  await nextTick()
+  const cardElement = resultsListRef.value?.querySelector<HTMLElement>(`[data-restaurant-id="${restaurantId}"]`)
+  cardElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+})
+
 const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
   try {
     await favorites.toggleFavorite(restaurant)
@@ -88,9 +127,29 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
 
 <template>
   <section class="space-y-6">
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
-      <aside class="rounded-xl border bg-white p-4 shadow-sm lg:col-span-1">
-        <h2 class="text-lg font-semibold">Search Filters</h2>
+    <header class="rounded-xl border bg-white p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-semibold text-slate-900">Find restaurants that match your needs</h1>
+          <p class="mt-1 text-sm text-slate-600">Choose dietary requirements and trust preferences, then compare on map and list.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="rounded-md border px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" @click="quickFillStrictHalal">
+            Quick fill: strict halal
+          </button>
+          <button class="rounded-md border px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" @click="quickFillVeganSafe">
+            Quick fill: vegan-safe
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <aside class="rounded-xl border bg-white p-4 shadow-sm lg:sticky lg:top-4 lg:col-span-4 xl:col-span-3">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-lg font-semibold">Search Filters</h2>
+          <button class="text-xs text-slate-500 hover:text-slate-700" @click="clearFilters">Reset</button>
+        </div>
 
         <label class="mt-4 block text-sm font-medium">Location (placeholder)</label>
         <input
@@ -179,24 +238,28 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
         <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
       </aside>
 
-      <div class="space-y-4 lg:col-span-3">
+      <div class="space-y-4 lg:col-span-8 xl:col-span-9">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold">Results</h2>
-          <button
-            class="rounded-md border bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 lg:hidden"
-            @click="mobileShowMap = !mobileShowMap"
-          >
-            {{ mobileShowMap ? 'Show List' : 'Show Map' }}
-          </button>
+          <div class="flex items-center gap-2">
+            <p v-if="searched && !loading" class="text-sm text-slate-500">{{ results.length }} matches</p>
+            <button
+              class="rounded-md border bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 lg:hidden"
+              @click="mobileShowMap = !mobileShowMap"
+            >
+              {{ mobileShowMap ? 'Show List' : 'Show Map' }}
+            </button>
+          </div>
         </div>
 
-        <div v-if="loading" class="rounded-lg border bg-white p-6 text-sm text-slate-600">Loading results...</div>
+        <div v-if="loading" class="rounded-lg border bg-white p-6 text-sm text-slate-600">
+          <p class="font-medium">Loading results...</p>
+          <p class="mt-1 text-xs text-slate-500">Checking trust and dietary matches.</p>
+        </div>
 
-        <div
-          v-else-if="searched && results.length === 0"
-          class="rounded-lg border bg-white p-6 text-sm text-slate-600"
-        >
-          No restaurants matched your filters.
+        <div v-else-if="searched && results.length === 0" class="rounded-lg border bg-white p-6 text-sm text-slate-600">
+          <p class="font-medium">No restaurants matched your filters.</p>
+          <p class="mt-1 text-xs text-slate-500">Try removing one required tag, or switch profile to balanced.</p>
         </div>
 
         <div v-else-if="!searched" class="rounded-lg border bg-white p-6 text-sm text-slate-600">
@@ -204,10 +267,11 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
         </div>
 
         <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <div class="space-y-3" :class="mobileShowMap ? 'hidden lg:block' : ''">
+          <div ref="resultsListRef" class="max-h-[70vh] space-y-3 overflow-auto pr-1" :class="mobileShowMap ? 'hidden lg:block' : ''">
             <ResultCard
               v-for="result in results"
               :key="result.restaurant.id"
+              :data-restaurant-id="result.restaurant.id"
               :result="result"
               :selected="selectedRestaurantId === result.restaurant.id"
               :is-favorited="favorites.isFavorited(result.restaurant.id)"
@@ -223,6 +287,7 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
                 :selected-restaurant-id="selectedRestaurantId"
                 @select="onSelectRestaurant"
               />
+              <p class="mt-2 text-xs text-slate-500">Tip: click markers to highlight and scroll to the matching card.</p>
             </div>
           </ClientOnly>
         </div>

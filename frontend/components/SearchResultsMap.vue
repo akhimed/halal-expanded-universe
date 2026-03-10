@@ -25,7 +25,7 @@ const clearMarkers = () => {
 }
 
 const markerColor = (restaurantId: number) =>
-  props.selectedRestaurantId === restaurantId ? 'bg-emerald-600' : 'bg-slate-700'
+  props.selectedRestaurantId === restaurantId ? 'bg-emerald-600 scale-125' : 'bg-slate-700'
 
 const renderMarkers = () => {
   if (!map || !maplibre) {
@@ -40,8 +40,11 @@ const renderMarkers = () => {
     el.title = item.restaurant.name
     el.addEventListener('click', () => emit('select', item.restaurant.id))
 
+    const popup = new maplibre.Popup({ offset: 18 }).setHTML(`\n      <div class="text-xs">\n        <p class="font-semibold">${item.restaurant.name}</p>\n        <p class="text-slate-500">Trust ${item.trust_score}/100</p>\n      </div>\n    `)
+
     const marker = new maplibre.Marker({ element: el })
       .setLngLat([item.restaurant.longitude, item.restaurant.latitude])
+      .setPopup(popup)
       .addTo(map)
 
     markers.push(marker)
@@ -97,8 +100,16 @@ watch(
 
 watch(
   () => props.selectedRestaurantId,
-  () => {
+  (selectedRestaurantId) => {
     renderMarkers()
+    if (!map || !selectedRestaurantId) return
+    const selected = resultsWithCoords.value.find((item) => item.restaurant.id === selectedRestaurantId)
+    if (!selected) return
+    map.flyTo({
+      center: [selected.restaurant.longitude, selected.restaurant.latitude],
+      zoom: Math.max(map.getZoom(), 12),
+      essential: true
+    })
   }
 )
 
@@ -112,7 +123,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-[420px] w-full overflow-hidden rounded-xl border bg-white">
+  <div class="h-[420px] w-full overflow-hidden rounded-xl border bg-white shadow-sm">
     <div v-if="resultsWithCoords.length === 0" class="flex h-full items-center justify-center px-4 text-sm text-slate-500">
       No mappable coordinates in current results.
     </div>
