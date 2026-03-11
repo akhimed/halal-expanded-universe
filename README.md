@@ -97,7 +97,7 @@ python -m backend.scripts.seed_dev_data
 Notes:
 - Run migrations before seeding.
 - Seed script is safe to rerun for local development bootstrapping (idempotent upsert by email/name; no duplicate demo rows).
-- Seed data now includes halal, kosher, vegan, vegetarian, hindu_vegetarian, mixed-concept, and low-trust edge-case listings for realistic local demos.
+- Seed data now includes 16 restaurants spanning halal, kosher, vegan, vegetarian, hindu_vegetarian, mixed-concept, high/low-trust, and conflicting/incomplete trust-signal edge cases for realistic local demos.
 
 ## Running tests/checks
 
