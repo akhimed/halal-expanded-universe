@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ReportType, RestaurantDetail } from '~/types/api'
-import { formatDistanceKm } from '~/utils/location'
+import { formatDistanceKm, haversineDistanceKm } from '~/utils/location'
 
 const route = useRoute()
 const api = useApiClient()
@@ -12,6 +12,7 @@ auth.hydrate()
 const loading = ref(true)
 const errorMessage = ref('')
 const restaurant = ref<RestaurantDetail | null>(null)
+const storedSearchLocation = ref<{ label: string; latitude: number; longitude: number } | null>(null)
 
 const searchExplanation = computed(() => {
   const value = route.query.explanation
@@ -26,7 +27,27 @@ const searchDistanceKm = computed(() => {
   return Number.isFinite(parsed) ? parsed : null
 })
 
-const searchDistanceLabel = computed(() => formatDistanceKm(searchDistanceKm.value))
+const routeSearchLocationLabel = computed(() => {
+  const value = route.query.search_location_label
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.length > 0) return value[0]
+  return ''
+})
+
+const derivedDistanceKm = computed(() => {
+  if (searchDistanceKm.value !== null) return searchDistanceKm.value
+  if (!storedSearchLocation.value || restaurant.value?.latitude == null || restaurant.value?.longitude == null) return null
+  return haversineDistanceKm(
+    storedSearchLocation.value.latitude,
+    storedSearchLocation.value.longitude,
+    restaurant.value.latitude,
+    restaurant.value.longitude
+  )
+})
+
+const searchDistanceLabel = computed(() => formatDistanceKm(derivedDistanceKm.value))
+
+const activeLocationLabel = computed(() => routeSearchLocationLabel.value || storedSearchLocation.value?.label || 'your search location')
 
 const isReportModalOpen = ref(false)
 const reportType = ref<ReportType>('outdated_info')
@@ -56,7 +77,22 @@ const loadRestaurant = async () => {
   }
 }
 
-onMounted(loadRestaurant)
+onMounted(() => {
+  if (process.client) {
+    const raw = localStorage.getItem('search_location')
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (typeof parsed?.label === 'string' && typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
+          storedSearchLocation.value = parsed
+        }
+      } catch {
+        storedSearchLocation.value = null
+      }
+    }
+  }
+  loadRestaurant()
+})
 
 const toggleFavorite = async () => {
   if (!restaurant.value) return
@@ -237,7 +273,7 @@ const submitClaim = async () => {
       </header>
 
       <p class="text-slate-700">{{ restaurant.description || 'No description available.' }}</p>
-      <p v-if="searchDistanceLabel" class="text-sm text-slate-500">Distance from your search location: {{ searchDistanceLabel }}</p>
+      <p v-if="searchDistanceLabel" class="text-sm text-slate-500">Distance from {{ activeLocationLabel }}: {{ searchDistanceLabel }}</p>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div class="rounded-lg border bg-emerald-50 p-3 text-sm">
