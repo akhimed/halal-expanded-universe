@@ -330,4 +330,16 @@ def test_trust_explanation_includes_level_and_caveats(client: TestClient):
     assert result["trust_level"] in {"high", "medium", "low"}
     assert any("No moderator-approved owner verification documents" in item for item in result["trust_caveats"])
     assert "Computed trust score:" in result["full_explanation"]
-    assert "Trust reflects certification, community verification, recency" in result["full_explanation"]
+    assert "High trust band" in result["full_explanation"] or "Medium trust band" in result["full_explanation"] or "Low trust band" in result["full_explanation"]
+    assert "Trust reflects weighted certification, community verification, recency" in result["full_explanation"]
+
+
+def test_restaurant_detail_includes_trust_band_metadata(client: TestClient):
+    response = client.get('/restaurants/1')
+    assert response.status_code == 200
+    breakdown = response.json()['trust_breakdown']
+
+    assert breakdown['trust_level'] in {'high', 'medium', 'low'}
+    assert breakdown['score_band'] in {'0.80-1.00', '0.60-0.79', '0.00-0.59'}
+    assert breakdown['score_band_label'] in {'High trust', 'Medium trust', 'Low trust'}
+    assert isinstance(breakdown['low_confidence'], bool)

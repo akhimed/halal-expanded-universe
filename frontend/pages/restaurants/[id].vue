@@ -135,16 +135,29 @@ const trustLevelTone = computed(() => {
   return 'bg-rose-100 text-rose-800 border-rose-200'
 })
 
+const trustBandLabel = computed(() => {
+  const label = restaurant.value?.trust_breakdown?.score_band_label
+  return typeof label === 'string' ? label : 'Trust level'
+})
+
+const trustBandRange = computed(() => {
+  const range = restaurant.value?.trust_breakdown?.score_band
+  return typeof range === 'string' ? range : '0.00-1.00'
+})
+
 const trustCaveats = computed(() => {
   const caveats = restaurant.value?.trust_breakdown?.caveats
   return Array.isArray(caveats) ? caveats : []
 })
+
+const trustHasLowConfidence = computed(() => restaurant.value?.trust_breakdown?.low_confidence === true)
 
 const trustRows = computed(() => {
   const breakdown = restaurant.value?.trust_breakdown
   if (!breakdown) return []
   return [
     { key: 'Base weighted score', value: breakdown.base_score },
+    { key: 'Trust level band', value: `${trustBandLabel.value} (${trustBandRange.value})` },
     { key: 'Owner verification submitted', value: breakdown.owner_verification_submitted },
     { key: 'Moderation approval bonus', value: breakdown.moderation_approval },
     { key: 'Contradiction penalty', value: breakdown.contradiction_penalty },
@@ -258,8 +271,12 @@ const submitClaim = async () => {
             </span>
           </div>
           <p class="mt-2 text-xs text-slate-600">
-            Trust is deterministic: weighted certification, community verification, and recency, adjusted by verification docs,
-            moderation outcomes, contradiction reports, and trust events.
+            Trust score is deterministic and explainable. We compute a weighted base score from certification, community verification,
+            and recency, then apply clear adjustments for owner verification submissions, moderator approvals, contradiction reports, and trust events.
+          </p>
+          <p class="mt-2 text-xs text-slate-600">
+            This listing is currently in the <span class="font-semibold">{{ trustBandLabel }}</span> band
+            ({{ trustBandRange }}), based on final score <span class="font-semibold">{{ restaurant.trust_breakdown.final_score }}</span>.
           </p>
           <ul class="mt-3 space-y-1 text-sm text-slate-700">
             <li v-for="row in trustRows" :key="row.key" class="flex items-center justify-between gap-4 rounded-md bg-white px-2 py-1">
@@ -267,6 +284,15 @@ const submitClaim = async () => {
               <span>{{ row.value }}</span>
             </li>
           </ul>
+          <div
+            v-if="trustHasLowConfidence"
+            class="mt-3 rounded-md border border-rose-300 bg-rose-100 p-3 text-xs text-rose-900"
+          >
+            <p class="font-semibold">Low-confidence listing warning</p>
+            <p class="mt-1">
+              Signals for this listing are limited or conflicting. Confirm certification, ingredients, and preparation practices directly with staff before visiting.
+            </p>
+          </div>
           <div v-if="trustCaveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
             <p class="font-semibold">Warnings and caveats</p>
             <ul class="mt-1 list-disc pl-4">
