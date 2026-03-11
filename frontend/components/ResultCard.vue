@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SearchResult } from '~/types/api'
+import { summarizeGroupTradeoffs, summarizeParticipantSatisfaction } from '~/utils/groupMode'
 import { formatDistanceKm } from '~/utils/location'
 
 const props = defineProps<{
@@ -22,6 +23,18 @@ const trustBadgeClass = computed(() => {
   if (props.result.trust_level === 'medium') return 'bg-amber-100 text-amber-800'
   return 'bg-rose-100 text-rose-800'
 })
+
+const distanceLabel = computed(() => formatDistanceKm(props.result.distance_km))
+
+const groupFitBadgeClass = computed(() => {
+  const score = props.result.group_fit_score
+  if (score === null || score === undefined) return 'bg-slate-100 text-slate-700'
+  if (score >= 80) return 'bg-emerald-100 text-emerald-800'
+  if (score >= 50) return 'bg-amber-100 text-amber-800'
+  return 'bg-rose-100 text-rose-800'
+})
+
+const groupSummary = computed(() => summarizeGroupTradeoffs(props.result))
 </script>
 
 <template>
@@ -46,6 +59,13 @@ const trustBadgeClass = computed(() => {
         <span class="rounded-full px-3 py-1 text-sm font-medium" :class="trustBadgeClass">
           Trust {{ result.trust_score }}/100 · {{ result.trust_level }}
         </span>
+        <span
+          v-if="result.group_fit_score !== null && result.group_fit_score !== undefined"
+          class="rounded-full px-3 py-1 text-xs font-medium"
+          :class="groupFitBadgeClass"
+        >
+          Group fit {{ result.group_fit_score }}/100
+        </span>
         <button
           class="rounded-md border px-2 py-1 text-xs"
           :class="isFavorited ? 'border-amber-300 bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-100'"
@@ -55,8 +75,6 @@ const trustBadgeClass = computed(() => {
         </button>
       </div>
     </div>
-
-
 
     <div v-if="result.trust_caveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
       <p class="font-medium">Trust caveats</p>
@@ -76,7 +94,6 @@ const trustBadgeClass = computed(() => {
       <span v-if="result.matched_tags.length === 0" class="text-xs text-slate-500">No required tags matched.</span>
     </div>
 
-
     <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
       <div class="rounded-md bg-slate-50 p-2">
         <p class="text-slate-500">Match tags</p>
@@ -87,10 +104,8 @@ const trustBadgeClass = computed(() => {
         <p class="font-semibold text-slate-800">{{ result.excluded_allergen_status.length }}</p>
       </div>
       <div class="rounded-md bg-slate-50 p-2">
-        <p class="text-slate-500">Group fit</p>
-        <p class="font-semibold text-slate-800">
-          {{ result.group_fit_score !== null && result.group_fit_score !== undefined ? result.group_fit_score : '—' }}
-        </p>
+        <p class="text-slate-500">Group tradeoffs</p>
+        <p class="font-semibold text-slate-800">{{ groupSummary.participantsWithTradeoffs }}</p>
       </div>
     </div>
 
@@ -103,9 +118,9 @@ const trustBadgeClass = computed(() => {
       </ul>
     </div>
 
-
     <div v-if="result.group_fit_score !== null && result.group_fit_score !== undefined" class="mt-3 rounded-md bg-indigo-50 p-2 text-xs text-indigo-800">
-      Group fit: {{ result.group_fit_score }}
+      <p class="font-medium">Group review</p>
+      <p class="mt-1">{{ groupSummary.headline }}</p>
     </div>
 
     <div v-if="result.participant_satisfaction.length > 0" class="mt-3 space-y-2">
@@ -114,8 +129,17 @@ const trustBadgeClass = computed(() => {
         :key="participant.participant_name"
         class="rounded-md border bg-slate-50 p-2 text-xs"
       >
-        <p class="font-medium">{{ participant.participant_name }} ({{ participant.profile }})</p>
-        <p>Required tags: {{ participant.required_tags_satisfied ? 'satisfied' : `missing: ${participant.missing_required_tags.join(', ') || 'none'}` }}</p>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="font-medium">{{ participant.participant_name }} ({{ participant.profile }})</p>
+          <span
+            class="rounded-full border px-2 py-0.5 text-[11px] font-medium"
+            :class="summarizeParticipantSatisfaction(participant).fitClass"
+          >
+            {{ summarizeParticipantSatisfaction(participant).fitLabel }} · {{ participant.participant_fit_score }}/100
+          </span>
+        </div>
+        <p class="mt-1 text-slate-600">{{ summarizeParticipantSatisfaction(participant).tradeoffSummary }}</p>
+        <p class="mt-1">Required tags: {{ participant.required_tags_satisfied ? 'satisfied' : `missing: ${participant.missing_required_tags.join(', ') || 'none'}` }}</p>
         <p>Allergens: {{ participant.excluded_allergens_satisfied ? 'safe' : `conflicts: ${participant.conflicting_allergens.join(', ')}` }}</p>
       </div>
     </div>
