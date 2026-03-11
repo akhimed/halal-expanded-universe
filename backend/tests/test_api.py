@@ -308,4 +308,49 @@ def test_trust_explanation_includes_level_and_caveats(client: TestClient):
     assert result["trust_level"] in {"high", "medium", "low"}
     assert any("No moderator-approved owner verification documents" in item for item in result["trust_caveats"])
     assert "Computed trust score:" in result["full_explanation"]
-    assert "Trust reflects certification, community verification, recency" in result["full_explanation"]
+    assert "Caveat:" in result["full_explanation"]
+
+
+def test_search_with_location_query_resolves_and_returns_distance(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from backend.app.services.location_service import ResolvedLocation
+
+    def fake_resolve_location(query: str) -> ResolvedLocation:
+        assert query == 'Toronto'
+        return ResolvedLocation(query='Toronto', label='Toronto, Ontario, Canada', latitude=43.651, longitude=-79.347)
+
+    monkeypatch.setattr('backend.app.api.routes.resolve_location', fake_resolve_location)
+
+    response = client.post(
+        '/search',
+        json={
+            'required_tags': [],
+            'excluded_allergens': [],
+            'profile': 'balanced',
+            'location_query': 'Toronto',
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['search_location']['label'] == 'Toronto, Ontario, Canada'
+    assert all('distance_km' in item for item in payload['results'])
+    assert payload['results'][0]['distance_km'] is not None
+
+
+def test_distance_aware_ranking_prefers_nearby_when_location_provided(client: TestClient):
+    response = client.post(
+        '/search',
+        json={
+            'required_tags': [],
+            'excluded_allergens': [],
+            'profile': 'balanced',
+            'location_latitude': 43.651,
+            'location_longitude': -79.347,
+        },
+    )
+
+    assert response.status_code == 200
+    results = response.json()['results']
+    assert len(results) == 3
+    assert results[0]['restaurant']['name'] == 'Halal House'
+    assert results[0]['distance_km'] <= results[1]['distance_km']
