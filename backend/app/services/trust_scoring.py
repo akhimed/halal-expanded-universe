@@ -100,6 +100,8 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
 
     return {
         "base_score": round(base, 4),
+        "score_band": trust_score_band(level),
+        "score_band_label": trust_score_band_label(level),
         "owner_verification_submitted": owner_verification_submitted,
         "moderation_approval": moderation_approval,
         "contradiction_penalty": round(contradiction_penalty, 4),
@@ -107,6 +109,7 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
         "recency_component": round(profile.recency_weight * restaurant.recency_score, 4),
         "final_score": final_score,
         "trust_level": level,
+        "low_confidence": level == "low",
         "caveats": caveats,
     }
 
@@ -122,6 +125,23 @@ def trust_level(score: float) -> str:
         return "medium"
     return "low"
 
+
+
+
+def trust_score_band(level: str) -> str:
+    if level == "high":
+        return "0.80-1.00"
+    if level == "medium":
+        return "0.60-0.79"
+    return "0.00-0.59"
+
+
+def trust_score_band_label(level: str) -> str:
+    if level == "high":
+        return "High trust"
+    if level == "medium":
+        return "Medium trust"
+    return "Low trust"
 
 def trust_caveats(*, recency_score: float, contradiction_penalty: float, approved_docs: int, final_score: float) -> list[str]:
     caveats: list[str] = []

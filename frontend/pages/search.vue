@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { GroupParticipantInput, SearchProfile, SearchResult } from '~/types/api'
+import { createParticipant, participantReadiness, summarizeGroupTradeoffs } from '~/utils/groupMode'
 
 const api = useApiClient()
 const auth = useAuth()
@@ -30,14 +31,7 @@ const mobileShowMap = ref(false)
 const resultsListRef = ref<HTMLElement | null>(null)
 
 const groupMode = ref(false)
-const participants = ref<GroupParticipantInput[]>([
-  {
-    participant_name: 'Participant 1',
-    required_tags: [],
-    excluded_allergens: [],
-    profile: 'balanced'
-  }
-])
+const participants = ref<GroupParticipantInput[]>([createParticipant(1)])
 
 onMounted(async () => {
   if (auth.isAuthenticated.value) {
@@ -46,12 +40,7 @@ onMounted(async () => {
 })
 
 const addParticipant = () => {
-  participants.value.push({
-    participant_name: `Participant ${participants.value.length + 1}`,
-    required_tags: [],
-    excluded_allergens: [],
-    profile: 'balanced'
-  })
+  participants.value.push(createParticipant(participants.value.length + 1))
 }
 
 const removeParticipant = (index: number) => {
@@ -142,14 +131,7 @@ const clearFilters = () => {
   currentLocation.value = null
   searchLocationLabel.value = ''
   groupMode.value = false
-  participants.value = [
-    {
-      participant_name: 'Participant 1',
-      required_tags: [],
-      excluded_allergens: [],
-      profile: 'balanced'
-    }
-  ]
+  participants.value = [createParticipant(1)]
 }
 
 const quickFillStrictHalal = () => {
@@ -182,6 +164,13 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
     errorMessage.value = 'Please login to save favorites.'
   }
 }
+
+const topGroupSummary = computed(() => {
+  if (!groupMode.value || results.value.length === 0) {
+    return null
+  }
+  return summarizeGroupTradeoffs(results.value[0])
+})
 </script>
 
 <template>
@@ -270,9 +259,12 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
 
         <template v-else>
           <div class="mt-4 space-y-3">
+            <p class="rounded-md border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-800">
+              Group mode compares each participant separately, then ranks restaurants by overall fit + trust.
+            </p>
             <div v-for="(participant, index) in participants" :key="index" class="rounded-md border bg-slate-50 p-3">
               <div class="flex items-center justify-between gap-2">
-                <input v-model="participant.participant_name" class="w-full rounded border px-2 py-1 text-sm" />
+                <input v-model="participant.participant_name" class="w-full rounded border px-2 py-1 text-sm" placeholder="Participant name" />
                 <button
                   class="rounded border px-2 py-1 text-xs hover:bg-slate-100"
                   :disabled="participants.length <= 1"
@@ -300,6 +292,10 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
               <select v-model="participant.profile" class="mt-1 w-full rounded border px-2 py-1 text-xs">
                 <option v-for="item in profileOptions" :key="item" :value="item">{{ item }}</option>
               </select>
+
+              <ul v-if="participantReadiness(participant).length > 0" class="mt-2 list-disc space-y-1 pl-4 text-[11px] text-slate-500">
+                <li v-for="tip in participantReadiness(participant)" :key="tip">{{ tip }}</li>
+              </ul>
             </div>
 
             <button class="w-full rounded-md border px-3 py-1 text-xs hover:bg-slate-100" @click="addParticipant">
@@ -350,8 +346,17 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
           Choose filters and click Search.
         </div>
 
-        <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <div ref="resultsListRef" class="max-h-[70vh] space-y-3 overflow-auto pr-1" :class="mobileShowMap ? 'hidden lg:block' : ''">
+        <div v-else class="space-y-4">
+          <div v-if="topGroupSummary" class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+            <p class="font-semibold">Group fit overview</p>
+            <p class="mt-1 text-xs">{{ topGroupSummary.headline }}</p>
+            <p class="mt-2 text-xs">
+              Strong fits: {{ topGroupSummary.strongFits }}/{{ topGroupSummary.participants }} · Tradeoffs: {{ topGroupSummary.participantsWithTradeoffs }}
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div ref="resultsListRef" class="max-h-[70vh] space-y-3 overflow-auto pr-1" :class="mobileShowMap ? 'hidden lg:block' : ''">
             <ResultCard
               v-for="result in results"
               :key="result.restaurant.id"
@@ -375,6 +380,7 @@ const onToggleFavorite = async (restaurant: SearchResult['restaurant']) => {
               <p class="mt-2 text-xs text-slate-500">Tip: click markers to highlight and scroll to the matching card.</p>
             </div>
           </ClientOnly>
+          </div>
         </div>
       </div>
     </div>
