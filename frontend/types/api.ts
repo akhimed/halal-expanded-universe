@@ -61,6 +61,7 @@ export interface SearchResult {
   matched_tags: string[]
   excluded_allergen_status: ExcludedAllergenStatus[]
   trust_score: number
+  distance_km?: number | null
   trust_level: 'high' | 'medium' | 'low'
   trust_caveats: string[]
   group_fit_score?: number | null

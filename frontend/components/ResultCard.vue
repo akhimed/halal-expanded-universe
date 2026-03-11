@@ -6,12 +6,16 @@ const props = defineProps<{
   result: SearchResult
   selected?: boolean
   isFavorited?: boolean
+  searchLocationLabel?: string
 }>()
 
 const emit = defineEmits<{
   select: [restaurantId: number]
   toggleFavorite: [restaurant: SearchResult['restaurant']]
 }>()
+
+
+const distanceLabel = computed(() => formatDistanceKm(props.result.distance_km))
 
 const trustBadgeClass = computed(() => {
   if (props.result.trust_level === 'high') return 'bg-emerald-100 text-emerald-800'
@@ -29,7 +33,7 @@ const trustBadgeClass = computed(() => {
     <div class="flex items-start justify-between gap-3">
       <div>
         <NuxtLink
-          :to="{ path: `/restaurants/${result.restaurant.id}`, query: { explanation: result.full_explanation, distance_km: result.distance_km } }"
+          :to="{ path: `/restaurants/${result.restaurant.id}`, query: { explanation: result.full_explanation, distance_km: result.distance_km, search_location_label: props.searchLocationLabel } }"
           class="text-lg font-semibold text-emerald-700 hover:underline"
           @click.stop
         >
