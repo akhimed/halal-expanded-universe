@@ -12,10 +12,12 @@ const tagOptions = ['halal', 'kosher', 'hindu_vegetarian', 'vegan', 'vegetarian'
 const allergenOptions = ['shellfish', 'nuts', 'dairy', 'gluten', 'soy', 'egg', 'sesame']
 const profileOptions: SearchProfile[] = ['balanced', 'strict', 'community_first']
 
+type LocationMode = 'none' | 'query' | 'current'
+
 const locationQuery = ref('')
 const locationSearchError = ref('')
 const searchLocationLabel = ref('')
-const useCurrentLocation = ref(false)
+const locationMode = ref<LocationMode>('none')
 const currentLocation = ref<{ latitude: number; longitude: number } | null>(null)
 const selectedTags = ref<string[]>([])
 const excludedAllergens = ref<string[]>([])
@@ -51,19 +53,31 @@ const onSearch = async () => {
   errorMessage.value = ''
   locationSearchError.value = ''
   try {
+    if (locationMode.value === 'current' && !currentLocation.value) {
+      locationSearchError.value = 'Choose "Use my current location" and allow location access first.'
+      return
+    }
+
     const response = await api.searchRestaurants({
       required_tags: selectedTags.value,
       excluded_allergens: excludedAllergens.value,
       profile: profile.value,
       group_mode: groupMode.value,
       participants: groupMode.value ? participants.value : [],
-      location_query: locationQuery.value.trim() || undefined,
-      location_latitude: useCurrentLocation.value ? currentLocation.value?.latitude : undefined,
-      location_longitude: useCurrentLocation.value ? currentLocation.value?.longitude : undefined
+      location_query: locationMode.value === 'query' ? locationQuery.value.trim() || undefined : undefined,
+      location_latitude: locationMode.value === 'current' ? currentLocation.value?.latitude : undefined,
+      location_longitude: locationMode.value === 'current' ? currentLocation.value?.longitude : undefined
     })
     results.value = response.results
     searched.value = true
     searchLocationLabel.value = response.search_location?.label || ''
+    if (process.client) {
+      if (response.search_location) {
+        localStorage.setItem('search_location', JSON.stringify(response.search_location))
+      } else {
+        localStorage.removeItem('search_location')
+      }
+    }
     selectedRestaurantId.value = response.results.length > 0 ? response.results[0].restaurant.id : null
   } catch (error) {
     const message = api.humanizeError(error, 'Search failed.')
@@ -90,12 +104,14 @@ const detectCurrentLocation = () => {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude
       }
-      useCurrentLocation.value = true
+      locationMode.value = 'current'
       searchLocationLabel.value = 'Using current location'
     },
     () => {
       locationSearchError.value = 'Could not access your current location.'
-      useCurrentLocation.value = false
+      if (locationMode.value === 'current') {
+        locationMode.value = 'none'
+      }
       currentLocation.value = null
     },
     { timeout: 5000 }
@@ -111,7 +127,7 @@ const clearFilters = () => {
   excludedAllergens.value = []
   profile.value = 'balanced'
   locationQuery.value = ''
-  useCurrentLocation.value = false
+  locationMode.value = 'none'
   currentLocation.value = null
   searchLocationLabel.value = ''
   groupMode.value = false
@@ -183,17 +199,32 @@ const topGroupSummary = computed(() => {
           <button class="text-xs text-slate-500 hover:text-slate-700" @click="clearFilters">Reset</button>
         </div>
 
-        <label class="mt-4 block text-sm font-medium">Location (city or ZIP/postal)</label>
+        <label class="mt-4 block text-sm font-medium">Search near</label>
+        <div class="mt-1 space-y-2 rounded-md border p-2 text-xs">
+          <label class="flex items-center gap-2">
+            <input v-model="locationMode" type="radio" value="none" />
+            Anywhere (no distance preference)
+          </label>
+          <label class="flex items-center gap-2">
+            <input v-model="locationMode" type="radio" value="query" />
+            Enter city or ZIP/postal code
+          </label>
+          <label class="flex items-center gap-2">
+            <input v-model="locationMode" type="radio" value="current" />
+            Use my current location
+          </label>
+        </div>
         <input
           v-model="locationQuery"
           type="text"
-          class="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+          class="mt-2 w-full rounded-md border px-3 py-2 text-sm disabled:bg-slate-100"
           placeholder="e.g., Toronto, ON or 10001"
+          :disabled="locationMode !== 'query'"
         />
         <button class="mt-2 w-full rounded-md border px-3 py-1 text-xs hover:bg-slate-100" @click="detectCurrentLocation">
-          Use my current location
+          Detect current location
         </button>
-        <p v-if="useCurrentLocation && currentLocation" class="mt-1 text-xs text-slate-500">
+        <p v-if="locationMode === 'current' && currentLocation" class="mt-1 text-xs text-slate-500">
           Current location: {{ currentLocation.latitude.toFixed(4) }}, {{ currentLocation.longitude.toFixed(4) }}
         </p>
         <p v-if="locationSearchError" class="mt-1 text-xs text-red-600">{{ locationSearchError }}</p>
@@ -331,6 +362,7 @@ const topGroupSummary = computed(() => {
               :key="result.restaurant.id"
               :data-restaurant-id="result.restaurant.id"
               :result="result"
+              :search-location-label="searchLocationLabel"
               :selected="selectedRestaurantId === result.restaurant.id"
               :is-favorited="favorites.isFavorited(result.restaurant.id)"
               @select="onSelectRestaurant"
