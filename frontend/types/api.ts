@@ -81,6 +81,22 @@ export interface SearchResponse {
   search_location?: SearchLocation | null
 }
 
+
+export interface TrustBreakdown {
+  base_score: number
+  score_band: string
+  score_band_label: string
+  owner_verification_submitted: number
+  moderation_approval: number
+  contradiction_penalty: number
+  event_delta: number
+  recency_component: number
+  final_score: number
+  trust_level: 'high' | 'medium' | 'low'
+  low_confidence: boolean
+  caveats: string[]
+}
+
 export interface RestaurantDetail {
   id: number
   name: string

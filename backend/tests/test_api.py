@@ -173,8 +173,30 @@ def test_migration_and_seed_smoke(tmp_path: Path):
         restaurant_count = conn.execute("select count(*) from restaurants").fetchone()[0]
         user_count = conn.execute("select count(*) from users").fetchone()[0]
 
-    assert restaurant_count == 10
+    assert restaurant_count == 16
     assert user_count == 2
+
+
+def test_seed_data_covers_diverse_tags_and_trust_edges(tmp_path: Path):
+    db_file = tmp_path / "seed_diversity.db"
+    db_url = f"sqlite:///{db_file}"
+    env = os.environ.copy()
+    env["DATABASE_URL"] = db_url
+
+    subprocess.run(["alembic", "-c", "backend/alembic.ini", "upgrade", "head"], check=True, env=env)
+    subprocess.run(["python", "-m", "backend.scripts.seed_dev_data"], check=True, env=env)
+
+    with sqlite3.connect(db_file) as conn:
+        tags = {row[0] for row in conn.execute("select distinct tag from restaurant_tags")}
+        low_signal_edges = conn.execute(
+            """
+            select count(*) from restaurants
+            where certification_score < 0.5 and community_verification_score < 0.5
+            """
+        ).fetchone()[0]
+
+    assert {"halal", "kosher", "vegan", "vegetarian", "mixed"}.issubset(tags)
+    assert low_signal_edges >= 2
 
 
 def test_group_search_mixed_satisfaction(client: TestClient):
@@ -308,4 +330,16 @@ def test_trust_explanation_includes_level_and_caveats(client: TestClient):
     assert result["trust_level"] in {"high", "medium", "low"}
     assert any("No moderator-approved owner verification documents" in item for item in result["trust_caveats"])
     assert "Computed trust score:" in result["full_explanation"]
-    assert "Trust reflects certification, community verification, recency" in result["full_explanation"]
+    assert "High trust band" in result["full_explanation"] or "Medium trust band" in result["full_explanation"] or "Low trust band" in result["full_explanation"]
+    assert "Trust reflects weighted certification, community verification, recency" in result["full_explanation"]
+
+
+def test_restaurant_detail_includes_trust_band_metadata(client: TestClient):
+    response = client.get('/restaurants/1')
+    assert response.status_code == 200
+    breakdown = response.json()['trust_breakdown']
+
+    assert breakdown['trust_level'] in {'high', 'medium', 'low'}
+    assert breakdown['score_band'] in {'0.80-1.00', '0.60-0.79', '0.00-0.59'}
+    assert breakdown['score_band_label'] in {'High trust', 'Medium trust', 'Low trust'}
+    assert isinstance(breakdown['low_confidence'], bool)

@@ -135,16 +135,29 @@ const trustLevelTone = computed(() => {
   return 'bg-rose-100 text-rose-800 border-rose-200'
 })
 
+const trustBandLabel = computed(() => {
+  const label = restaurant.value?.trust_breakdown?.score_band_label
+  return typeof label === 'string' ? label : 'Trust level'
+})
+
+const trustBandRange = computed(() => {
+  const range = restaurant.value?.trust_breakdown?.score_band
+  return typeof range === 'string' ? range : '0.00-1.00'
+})
+
 const trustCaveats = computed(() => {
   const caveats = restaurant.value?.trust_breakdown?.caveats
   return Array.isArray(caveats) ? caveats : []
 })
+
+const trustHasLowConfidence = computed(() => restaurant.value?.trust_breakdown?.low_confidence === true)
 
 const trustRows = computed(() => {
   const breakdown = restaurant.value?.trust_breakdown
   if (!breakdown) return []
   return [
     { key: 'Base weighted score', value: breakdown.base_score },
+    { key: 'Trust level band', value: `${trustBandLabel.value} (${trustBandRange.value})` },
     { key: 'Owner verification submitted', value: breakdown.owner_verification_submitted },
     { key: 'Moderation approval bonus', value: breakdown.moderation_approval },
     { key: 'Contradiction penalty', value: breakdown.contradiction_penalty },
