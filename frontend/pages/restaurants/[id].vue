@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { ReportType, RestaurantDetail } from '~/types/api'
+import type { OwnerClaimStatus, ReportType, RestaurantDetail } from '~/types/api'
 import { formatDistanceKm } from '~/utils/location'
+import { claimStatusMeta, formatAllergenPresence, getPrimaryPhotoUrl } from '~/utils/restaurantDetail'
 
 const route = useRoute()
 const api = useApiClient()
@@ -127,7 +128,6 @@ const closeClaimModal = () => {
   isClaimModalOpen.value = false
 }
 
-
 const trustLevelTone = computed(() => {
   const level = restaurant.value?.trust_breakdown?.trust_level
   if (level === 'high') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -152,6 +152,11 @@ const trustRows = computed(() => {
     { key: 'Final trust score', value: breakdown.final_score }
   ]
 })
+
+const claimStatus = computed<OwnerClaimStatus | null>(() => restaurant.value?.owner_claim_status ?? null)
+
+const claimState = computed(() => claimStatusMeta(claimStatus.value))
+const primaryPhotoUrl = computed(() => getPrimaryPhotoUrl(restaurant.value))
 
 const submitClaim = async () => {
   if (!restaurant.value) return
@@ -195,103 +200,162 @@ const submitClaim = async () => {
     </div>
 
     <article v-else-if="restaurant" class="space-y-6 rounded-xl border bg-white p-4 shadow-sm sm:p-6">
-      <header class="flex flex-col gap-3 border-b pb-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 class="text-2xl font-bold">{{ restaurant.name }}</h1>
-          <p class="text-sm text-slate-600">{{ restaurant.address || 'Address unavailable' }}</p>
+      <header class="space-y-4 border-b pb-5">
+        <div class="flex flex-col gap-4 md:flex-row md:justify-between">
+          <div>
+            <h1 class="text-2xl font-bold">{{ restaurant.name }}</h1>
+            <p class="text-sm text-slate-600">{{ restaurant.address || 'Address unavailable' }}</p>
+            <p v-if="searchDistanceLabel" class="mt-2 text-xs text-slate-500">Distance from your search: {{ searchDistanceLabel }}</p>
+          </div>
+          <div class="flex flex-wrap items-start gap-2">
+            <button
+              class="rounded-md border px-3 py-1 text-xs"
+              :class="favorites.isFavorited(restaurant.id) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-100'"
+              @click="toggleFavorite"
+            >
+              {{ favorites.isFavorited(restaurant.id) ? 'Saved' : 'Save' }}
+            </button>
+            <button
+              class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+              @click="openClaimModal"
+            >
+              Claim this listing
+            </button>
+            <button
+              class="rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700 hover:bg-rose-100"
+              @click="openReportModal"
+            >
+              Report listing
+            </button>
+          </div>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <button
-            class="rounded-md border px-3 py-1 text-xs"
-            :class="favorites.isFavorited(restaurant.id) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-100'"
-            @click="toggleFavorite"
-          >
-            {{ favorites.isFavorited(restaurant.id) ? 'Saved' : 'Save' }}
-          </button>
-          <button
-            class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
-            @click="openClaimModal"
-          >
-            Claim this listing
-          </button>
-          <button
-            class="rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700 hover:bg-rose-100"
-            @click="openReportModal"
-          >
-            Report listing
-          </button>
-        </div>
+
+        <p class="text-sm text-slate-700">{{ restaurant.description || 'No description available yet. Help improve this listing by reporting missing details.' }}</p>
+        <p v-if="searchExplanation" class="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+          Why this matched: {{ searchExplanation }}
+        </p>
       </header>
 
-      <p class="text-slate-700">{{ restaurant.description || 'No description available.' }}</p>
-      <p v-if="searchDistanceLabel" class="text-sm text-slate-500">Distance from your search location: {{ searchDistanceLabel }}</p>
-
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div class="rounded-lg border bg-emerald-50 p-3 text-sm">
-          <p class="text-xs text-emerald-700">Certification trust</p>
-          <p class="text-lg font-semibold text-emerald-900">{{ restaurant.certification_score }}</p>
-        </div>
-        <div class="rounded-lg border bg-indigo-50 p-3 text-sm">
-          <p class="text-xs text-indigo-700">Community verification</p>
-          <p class="text-lg font-semibold text-indigo-900">{{ restaurant.community_verification_score }}</p>
-        </div>
-        <div class="rounded-lg border bg-amber-50 p-3 text-sm">
-          <p class="text-xs text-amber-700">Recency</p>
-          <p class="text-lg font-semibold text-amber-900">{{ restaurant.recency_score }}</p>
-        </div>
-      </div>
-
-      <ClientOnly>
-        <RestaurantLocationMap
-          :latitude="restaurant.latitude"
-          :longitude="restaurant.longitude"
-          :name="restaurant.name"
-        />
-      </ClientOnly>
-
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div v-if="restaurant.trust_breakdown" class="rounded-lg border bg-slate-50 p-4">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 class="font-semibold">Trust Breakdown</h2>
-            <span class="rounded-full border px-3 py-1 text-xs font-semibold capitalize" :class="trustLevelTone">
-              {{ restaurant.trust_breakdown.trust_level }} trust
-            </span>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section class="space-y-4 lg:col-span-2">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="rounded-lg border bg-emerald-50 p-3 text-sm">
+              <p class="text-xs text-emerald-700">Certification trust</p>
+              <p class="text-lg font-semibold text-emerald-900">{{ restaurant.certification_score }}</p>
+            </div>
+            <div class="rounded-lg border bg-indigo-50 p-3 text-sm">
+              <p class="text-xs text-indigo-700">Community verification</p>
+              <p class="text-lg font-semibold text-indigo-900">{{ restaurant.community_verification_score }}</p>
+            </div>
+            <div class="rounded-lg border bg-amber-50 p-3 text-sm">
+              <p class="text-xs text-amber-700">Recency</p>
+              <p class="text-lg font-semibold text-amber-900">{{ restaurant.recency_score }}</p>
+            </div>
           </div>
-          <p class="mt-2 text-xs text-slate-600">
-            Trust is deterministic: weighted certification, community verification, and recency, adjusted by verification docs,
-            moderation outcomes, contradiction reports, and trust events.
-          </p>
-          <ul class="mt-3 space-y-1 text-sm text-slate-700">
-            <li v-for="row in trustRows" :key="row.key" class="flex items-center justify-between gap-4 rounded-md bg-white px-2 py-1">
-              <span class="font-medium">{{ row.key }}</span>
-              <span>{{ row.value }}</span>
-            </li>
-          </ul>
-          <div v-if="trustCaveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-            <p class="font-semibold">Warnings and caveats</p>
-            <ul class="mt-1 list-disc pl-4">
-              <li v-for="caveat in trustCaveats" :key="caveat">{{ caveat }}</li>
+
+          <div class="rounded-lg border bg-slate-50 p-4">
+            <h2 class="font-semibold">Dietary tags</h2>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <span v-for="tag in restaurant.tags" :key="tag.tag" class="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-900">
+                {{ tag.tag }}
+              </span>
+              <span v-if="restaurant.tags.length === 0" class="rounded-md border border-dashed px-3 py-2 text-sm text-slate-500">
+                No dietary tags yet.
+              </span>
+            </div>
+          </div>
+
+          <div class="rounded-lg border bg-slate-50 p-4">
+            <h2 class="font-semibold">Allergen information</h2>
+            <ul class="mt-2 space-y-2 text-sm text-slate-700">
+              <li
+                v-for="item in restaurant.allergen_info"
+                :key="item.allergen"
+                class="flex items-center justify-between rounded-md bg-white px-3 py-2"
+              >
+                <span class="font-medium">{{ item.allergen }}</span>
+                <span>{{ formatAllergenPresence(item.present) }}</span>
+              </li>
+              <li v-if="restaurant.allergen_info.length === 0" class="rounded-md border border-dashed px-3 py-2 text-slate-500">
+                No allergen details have been provided.
+              </li>
             </ul>
           </div>
-        </div>
 
-        <div>
-          <h2 class="font-semibold">Tags</h2>
-          <div class="mt-2 flex flex-wrap gap-2">
-            <span v-for="tag in restaurant.tags" :key="tag.tag" class="rounded-full bg-emerald-100 px-2 py-1 text-xs">
-              {{ tag.tag }}
-            </span>
-            <span v-if="restaurant.tags.length === 0" class="text-sm text-slate-500">No tags available.</span>
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="rounded-lg border bg-slate-50 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 class="font-semibold">Trust details</h2>
+                <span class="rounded-full border px-3 py-1 text-xs font-semibold capitalize" :class="trustLevelTone">
+                  {{ restaurant.trust_breakdown?.trust_level || 'unknown' }} trust
+                </span>
+              </div>
+              <p class="mt-2 text-xs text-slate-600">
+                Deterministic trust combines weighted scores with verification and moderation events.
+              </p>
+              <ul v-if="trustRows.length > 0" class="mt-3 space-y-1 text-sm text-slate-700">
+                <li v-for="row in trustRows" :key="row.key" class="flex items-center justify-between gap-4 rounded-md bg-white px-2 py-1">
+                  <span class="font-medium">{{ row.key }}</span>
+                  <span>{{ row.value }}</span>
+                </li>
+              </ul>
+              <p v-else class="mt-3 rounded-md border border-dashed bg-white px-3 py-2 text-sm text-slate-500">
+                Trust breakdown is not available yet.
+              </p>
+              <div v-if="trustCaveats.length > 0" class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <p class="font-semibold">Warnings and caveats</p>
+                <ul class="mt-1 list-disc pl-4">
+                  <li v-for="caveat in trustCaveats" :key="caveat">{{ caveat }}</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="rounded-lg border bg-slate-50 p-4">
+                <h2 class="font-semibold">Owner claim state</h2>
+                <p class="mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold" :class="claimState.tone">
+                  {{ claimState.label }}
+                </p>
+                <p class="mt-3 text-xs text-slate-600">Owners can claim this listing and submit verification documents for review.</p>
+              </div>
+
+              <div class="rounded-lg border bg-slate-50 p-4">
+                <h2 class="font-semibold">Report actions</h2>
+                <p class="mt-2 text-xs text-slate-600">
+                  Spot outdated dietary, allergen, or certification details? Submit a report for moderator review.
+                </p>
+                <button
+                  class="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-100"
+                  @click="openReportModal"
+                >
+                  Submit a report
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="space-y-4">
+          <div class="overflow-hidden rounded-lg border bg-slate-50">
+            <img
+              v-if="primaryPhotoUrl"
+              :src="primaryPhotoUrl"
+              :alt="`${restaurant.name} photo`"
+              class="h-52 w-full object-cover"
+            >
+            <div v-else class="flex h-52 items-center justify-center bg-slate-100 px-4 text-center text-sm text-slate-500">
+              No photo uploaded yet.
+            </div>
           </div>
 
-          <h2 class="mt-4 font-semibold">Allergen Info</h2>
-          <ul class="mt-2 space-y-1 text-sm text-slate-700">
-            <li v-for="item in restaurant.allergen_info" :key="item.allergen">
-              {{ item.allergen }}: {{ item.present ? 'present' : 'not present' }}
-            </li>
-            <li v-if="restaurant.allergen_info.length === 0" class="text-slate-500">No allergen details yet.</li>
-          </ul>
-        </div>
+          <ClientOnly>
+            <RestaurantLocationMap
+              :latitude="restaurant.latitude"
+              :longitude="restaurant.longitude"
+              :name="restaurant.name"
+            />
+          </ClientOnly>
+        </aside>
       </div>
     </article>
 
@@ -379,7 +443,7 @@ const submitClaim = async () => {
               type="url"
               class="w-full rounded-md border px-3 py-2 text-sm"
               placeholder="https://example.com/photo-or-proof"
-            />
+            >
           </label>
 
           <p

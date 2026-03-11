@@ -92,6 +92,9 @@ export interface RestaurantDetail {
   community_verification_score: number
   recency_score: number
   trust_breakdown?: Record<string, number | string | string[]>
+  owner_claim_status?: OwnerClaimStatus | null
+  photo_url?: string | null
+  photos?: { url: string; caption?: string | null }[]
   tags: { tag: string }[]
   allergen_info: { allergen: string; present: boolean }[]
 }
