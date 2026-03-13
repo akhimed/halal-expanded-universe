@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.models import AuditLog, Report, User
+from backend.app.services.trust_evidence_service import create_trust_evidence
 from backend.app.services.trust_event_service import create_trust_event
 
 REPORT_TYPES = {
@@ -59,6 +60,19 @@ def create_report(
     db.add(audit)
 
     if report_type in {"inaccurate_halal_status", "inaccurate_kosher_status", "allergen_risk", "alcohol_served"}:
+        claim_key = report_type.replace("inaccurate_", "").replace("_status", "")
+        create_trust_evidence(
+            db,
+            restaurant_id=restaurant_id,
+            claim_key=claim_key,
+            evidence_type="contradiction_report",
+            stance="contradicts",
+            status="pending",
+            confidence_weight=0.9,
+            source_label=current_user.email,
+            source_url=evidence_url,
+            summary=description,
+        )
         create_trust_event(
             db,
             restaurant_id=restaurant_id,
@@ -66,6 +80,19 @@ def create_report(
             delta=-0.02,
             actor_user_id=current_user.id,
             metadata={"report_id": report.id, "report_type": report_type},
+        )
+    else:
+        create_trust_evidence(
+            db,
+            restaurant_id=restaurant_id,
+            claim_key="listing_accuracy",
+            evidence_type="community_report",
+            stance="neutral",
+            status="pending",
+            confidence_weight=0.6,
+            source_label=current_user.email,
+            source_url=evidence_url,
+            summary=description,
         )
     db.commit()
     db.refresh(report)

@@ -59,6 +59,8 @@ const reportFeedback = ref<{ type: 'success' | 'error'; message: string } | null
 
 const isClaimModalOpen = ref(false)
 const claimNotes = ref('')
+const claimKey = ref('halal_status')
+const claimSourceUrl = ref('')
 const claimSubmitting = ref(false)
 const claimFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -187,6 +189,11 @@ const trustCaveats = computed(() => {
 })
 
 const trustHasLowConfidence = computed(() => restaurant.value?.trust_breakdown?.low_confidence === true)
+const trustHasConflicts = computed(() => restaurant.value?.trust_breakdown?.conflicting_claims === true)
+const trustEvidenceByType = computed(() => {
+  const value = restaurant.value?.trust_breakdown?.evidence_by_type
+  return value ? Object.entries(value) : []
+})
 
 const trustRows = computed(() => {
   const breakdown = restaurant.value?.trust_breakdown
@@ -198,6 +205,12 @@ const trustRows = computed(() => {
     { key: 'Moderation approval bonus', value: breakdown.moderation_approval },
     { key: 'Contradiction penalty', value: breakdown.contradiction_penalty },
     { key: 'Trust events delta', value: breakdown.event_delta },
+    { key: 'Evidence net impact', value: breakdown.evidence_net },
+    { key: 'Evidence freshness', value: breakdown.evidence_freshness },
+    {
+      key: 'Evidence counts',
+      value: `${breakdown.evidence_counts?.approved ?? 0}/${breakdown.evidence_counts?.total ?? 0} approved`
+    },
     { key: 'Final trust score', value: breakdown.final_score }
   ]
 })
@@ -218,12 +231,18 @@ const submitClaim = async () => {
   claimFeedback.value = null
 
   try {
-    await api.submitOwnerClaim(restaurant.value.id, { notes: claimNotes.value.trim() || undefined })
+    await api.submitOwnerClaim(restaurant.value.id, {
+      notes: claimNotes.value.trim() || undefined,
+      claim_key: claimKey.value,
+      source_url: claimSourceUrl.value.trim() || undefined
+    })
     claimFeedback.value = {
       type: 'success',
       message: 'Claim submitted. You can track status in Owner Dashboard.'
     }
     claimNotes.value = ''
+    claimKey.value = 'halal_status'
+    claimSourceUrl.value = ''
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to submit claim. Please try again.'
     claimFeedback.value = { type: 'error', message }
@@ -357,6 +376,18 @@ const submitClaim = async () => {
                   <li v-for="caveat in trustCaveats" :key="caveat">{{ caveat }}</li>
                 </ul>
               </div>
+              <div v-if="trustHasConflicts" class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Conflicting religious/dietary claim evidence is present. Check source details and recent moderation updates before relying on this listing.
+              </div>
+              <div v-if="trustEvidenceByType.length > 0" class="mt-3 rounded-md border bg-white p-3 text-xs text-slate-700">
+                <p class="font-semibold">Evidence by source type</p>
+                <ul class="mt-2 space-y-1">
+                  <li v-for="[type, data] in trustEvidenceByType" :key="type" class="flex items-center justify-between">
+                    <span>{{ type }}</span>
+                    <span>{{ data.count }} items · impact {{ data.impact }}</span>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <div class="space-y-4">
@@ -431,6 +462,26 @@ const submitClaim = async () => {
               class="w-full rounded-md border px-3 py-2 text-sm"
               placeholder="Business name, role, and any verification context"
             />
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium text-slate-700">Claim type</span>
+            <select v-model="claimKey" class="w-full rounded-md border px-3 py-2 text-sm">
+              <option value="halal_status">Halal status</option>
+              <option value="kosher_status">Kosher status</option>
+              <option value="allergen_handling">Allergen handling</option>
+              <option value="listing_claim">General listing claim</option>
+            </select>
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium text-slate-700">Evidence source URL (optional)</span>
+            <input
+              v-model="claimSourceUrl"
+              type="url"
+              class="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="https://example.com/menu-or-certification"
+            >
           </label>
 
           <p

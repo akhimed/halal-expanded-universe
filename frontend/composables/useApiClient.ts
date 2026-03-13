@@ -14,6 +14,8 @@ import type {
   GroupParticipantInput,
   SearchProfile,
   SearchResponse,
+  TrustEvidenceItem,
+  TrustEvidenceListResponse,
   VerificationDocument,
   VerificationDocumentsResponse
 } from '~/types/api'
@@ -81,7 +83,7 @@ export const useApiClient = () => {
     })
   }
 
-  const submitOwnerClaim = async (restaurantId: number, payload: { notes?: string }) => {
+  const submitOwnerClaim = async (restaurantId: number, payload: { notes?: string; claim_key?: string; source_url?: string }) => {
     return await $fetch<OwnerClaimResponse>(`${baseURL}/restaurants/${restaurantId}/claims`, {
       method: 'POST',
       headers: authHeaders(),
@@ -157,6 +159,37 @@ export const useApiClient = () => {
     })
   }
 
+  const listModerationTrustEvidence = async (params?: { limit?: number; offset?: number; status?: string }) => {
+    return await $fetch<TrustEvidenceListResponse>(`${baseURL}/moderation/trust-evidence`, {
+      query: params,
+      headers: authHeaders()
+    })
+  }
+
+  const updateModerationTrustEvidence = async (evidenceId: number, payload: { status: 'approved' | 'rejected' }) => {
+    return await $fetch<TrustEvidenceItem>(`${baseURL}/moderation/trust-evidence/${evidenceId}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: payload
+    })
+  }
+
+  const createManualTrustEvidence = async (payload: {
+    restaurant_id: number
+    claim_key: string
+    stance: 'supports' | 'contradicts' | 'neutral'
+    summary?: string
+    source_label?: string
+    source_url?: string
+    confidence_weight?: number
+  }) => {
+    return await $fetch<TrustEvidenceItem>(`${baseURL}/moderation/trust-evidence/manual-note`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: payload
+    })
+  }
+
   const submitRestaurantReport = async (
     restaurantId: number,
     payload: { report_type: ReportType; description?: string; evidence_url?: string }
@@ -206,6 +239,9 @@ export const useApiClient = () => {
     updateModerationOwnerClaim,
     listModerationVerificationDocuments,
     updateModerationVerificationDocument,
+    listModerationTrustEvidence,
+    updateModerationTrustEvidence,
+    createManualTrustEvidence,
     submitRestaurantReport,
     searchRestaurants,
     getRestaurantById,

@@ -8,6 +8,7 @@ from backend.app.models.entities import (
     RestaurantAllergenInfo,
     RestaurantTag,
     TrustEvent,
+    TrustEvidence,
     User,
     VerificationDocument,
 )
@@ -23,5 +24,6 @@ __all__ = [
     "OwnerClaim",
     "VerificationDocument",
     "TrustEvent",
+    "TrustEvidence",
     "AuditLog",
 ]

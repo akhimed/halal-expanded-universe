@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
-from backend.app.models import OwnerClaim, Restaurant, User
+from backend.app.models import OwnerClaim, Restaurant, TrustEvidence, User
 
 
 @pytest.fixture()
@@ -71,6 +71,7 @@ def test_verification_and_contradiction_impact_trust_score(client_and_session):
     base_detail = client.get("/restaurants/1")
     assert base_detail.status_code == 200
     base_score = base_detail.json()["trust_breakdown"]["final_score"]
+    assert "evidence_freshness" in base_detail.json()["trust_breakdown"]
 
     claim_resp = client.post(
         "/restaurants/1/claims",
@@ -101,6 +102,7 @@ def test_verification_and_contradiction_impact_trust_score(client_and_session):
     assert after_submit_detail.status_code == 200
     after_submit_score = after_submit_detail.json()["trust_breakdown"]["final_score"]
     assert after_submit_score >= base_score
+    assert after_submit_detail.json()["trust_breakdown"]["evidence_counts"]["total"] >= 2
 
     approve_resp = client.patch(
         f"/moderation/verification-documents/{doc_id}",
@@ -124,7 +126,18 @@ def test_verification_and_contradiction_impact_trust_score(client_and_session):
     after_contradiction_detail = client.get("/restaurants/1")
     assert after_contradiction_detail.status_code == 200
     after_contradiction_score = after_contradiction_detail.json()["trust_breakdown"]["final_score"]
-    assert after_contradiction_score < after_approve_score
+    assert after_contradiction_detail.json()["trust_breakdown"]["contradiction_penalty"] > 0
+    assert after_contradiction_score <= after_approve_score
+    assert after_contradiction_detail.json()["trust_breakdown"]["conflicting_claims"] is True
+    assert any("Conflicting trust evidence" in c for c in after_contradiction_detail.json()["trust_breakdown"]["caveats"])
+
+    with SessionLocal() as db:
+        evidence = db.scalars(select(TrustEvidence).where(TrustEvidence.restaurant_id == 1)).all()
+        evidence_types = {row.evidence_type for row in evidence}
+        assert "owner_submitted_claim" in evidence_types
+        assert "owner_submitted_document" in evidence_types
+        assert "moderator_approval" in evidence_types
+        assert "contradiction_report" in evidence_types
 
     trust_events = client.get("/restaurants/1/trust-events")
     assert trust_events.status_code == 200

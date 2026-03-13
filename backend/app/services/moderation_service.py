@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models import AuditLog, OwnerClaim, Report, User
+from backend.app.services.trust_evidence_service import create_trust_evidence
 from backend.app.services.trust_event_service import create_trust_event
 
 ALLOWED_REPORT_STATUSES = {"open", "under_review", "resolved", "rejected"}
@@ -54,6 +55,17 @@ def update_report_status(
     )
     db.add(audit)
     if status in {"resolved", "rejected"} and report.restaurant_id:
+        create_trust_evidence(
+            db,
+            restaurant_id=report.restaurant_id,
+            claim_key=report.report_type or "listing_accuracy",
+            evidence_type="moderator_approval",
+            stance="supports" if status == "resolved" else "contradicts",
+            status="approved",
+            confidence_weight=1.0,
+            source_label=f"moderator:{moderator.id}",
+            summary=note,
+        )
         create_trust_event(
             db,
             restaurant_id=report.restaurant_id,

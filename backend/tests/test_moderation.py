@@ -217,3 +217,51 @@ def test_report_moderation_writes_audit_log_with_note(client_and_session):
         metadata = json.loads(audit.metadata_json or "{}")
         assert metadata["new_status"] == "under_review"
         assert metadata["note"] == "triage started"
+
+
+def test_moderator_can_review_and_create_trust_evidence(client_and_session):
+    client, SessionLocal = client_and_session
+
+    from backend.app.models import Restaurant
+
+    with SessionLocal() as db:
+        db.add(Restaurant(name="Evidence Place", certification_score=0.85, community_verification_score=0.8, recency_score=0.9))
+        db.commit()
+
+    owner_token = _register(client, email="evidence-owner@example.com")
+    moderator_token = _register(client, email="evidence-mod@example.com")
+    _set_role(SessionLocal, "evidence-mod@example.com", "moderator")
+
+    claim_resp = client.post(
+        "/restaurants/1/claims",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"notes": "Owner-submitted trust claim", "claim_key": "halal_status"},
+    )
+    assert claim_resp.status_code == 200
+
+    list_resp = client.get("/moderation/trust-evidence", headers={"Authorization": f"Bearer {moderator_token}"})
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()["evidence"]) >= 1
+    evidence_id = list_resp.json()["evidence"][0]["id"]
+
+    update_resp = client.patch(
+        f"/moderation/trust-evidence/{evidence_id}",
+        headers={"Authorization": f"Bearer {moderator_token}"},
+        json={"status": "approved"},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["status"] == "approved"
+
+    manual_resp = client.post(
+        "/moderation/trust-evidence/manual-note",
+        headers={"Authorization": f"Bearer {moderator_token}"},
+        json={
+            "restaurant_id": 1,
+            "claim_key": "halal_status",
+            "stance": "supports",
+            "summary": "Called restaurant and confirmed current policy",
+            "confidence_weight": 1.0,
+        },
+    )
+    assert manual_resp.status_code == 200
+    assert manual_resp.json()["evidence_type"] == "manual_note"

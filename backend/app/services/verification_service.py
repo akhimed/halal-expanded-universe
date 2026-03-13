@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import AuditLog, OwnerClaim, User, VerificationDocument
 from backend.app.services.file_storage import storage_backend
+from backend.app.services.trust_evidence_service import create_trust_evidence
 from backend.app.services.trust_event_service import create_trust_event
 
 
@@ -66,6 +67,17 @@ async def submit_verification_document_with_storage(
         delta=0.01,
         actor_user_id=current_user.id,
         metadata={"verification_document_id": doc.id},
+    )
+    create_trust_evidence(
+        db,
+        restaurant_id=claim.restaurant_id,
+        claim_key=document_type,
+        evidence_type="owner_submitted_document",
+        stance="supports",
+        status="pending",
+        confidence_weight=1.0,
+        source_label=original_filename,
+        summary=notes,
     )
 
     db.commit()
@@ -127,6 +139,17 @@ def moderate_verification_document(
         delta=0.08 if status == "approved" else -0.04,
         actor_user_id=moderator.id,
         metadata={"verification_document_id": doc.id},
+    )
+    create_trust_evidence(
+        db,
+        restaurant_id=doc.restaurant_id,
+        claim_key=doc.document_type,
+        evidence_type="moderator_approval",
+        stance="supports" if status == "approved" else "contradicts",
+        status="approved",
+        confidence_weight=1.2 if status == "approved" else 1.0,
+        source_label=f"moderator:{moderator.id}",
+        summary=note,
     )
 
     db.commit()
