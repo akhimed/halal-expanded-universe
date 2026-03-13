@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_current_user, require_roles
 from backend.app.api.schemas import (
+    AdminImportRequest,
+    AdminImportResponse,
+    AdminProvidersResponse,
     AuthTokenResponse,
     CreateOwnerClaimRequest,
     CreateReportRequest,
@@ -49,6 +52,7 @@ from backend.app.services.moderation_service import (
 from backend.app.services.owner_claim_service import list_owner_claims, submit_owner_claim
 from backend.app.services.report_service import create_report
 from backend.app.services.location_service import ResolvedLocation, resolve_location
+from backend.app.services.ingestion import available_providers, run_ingestion_job
 from backend.app.services.restaurant_service import (
     get_restaurant_by_id,
     list_restaurants,
@@ -97,6 +101,50 @@ def _verification_doc_model(doc) -> VerificationDocumentResponse:
 @router.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "backend"}
+
+
+@router.get("/admin/import/providers", response_model=AdminProvidersResponse)
+def list_import_providers(
+    admin: User = Depends(require_roles("admin")),
+) -> AdminProvidersResponse:
+    _ = admin
+    return AdminProvidersResponse(providers=list(available_providers()))
+
+
+@router.post("/admin/import/restaurants", response_model=AdminImportResponse)
+def import_restaurants(
+    payload: AdminImportRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_roles("admin")),
+) -> AdminImportResponse:
+    _ = admin
+    try:
+        result = run_ingestion_job(
+            db,
+            provider=payload.provider,
+            mode=payload.mode,
+            query=payload.query,
+            min_lat=payload.min_lat,
+            min_lon=payload.min_lon,
+            max_lat=payload.max_lat,
+            max_lon=payload.max_lon,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            radius_km=payload.radius_km,
+            country_code=payload.country_code,
+            limit=payload.limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return AdminImportResponse(
+        provider=payload.provider,
+        mode=payload.mode,
+        created_count=result.created_count,
+        updated_count=result.updated_count,
+        skipped_count=result.skipped_count,
+        imported_restaurant_ids=result.imported_restaurant_ids,
+    )
 
 
 @router.post("/auth/register", response_model=AuthTokenResponse)

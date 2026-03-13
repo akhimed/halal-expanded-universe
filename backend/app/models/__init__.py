@@ -4,6 +4,7 @@ from backend.app.models.entities import (
     OwnerClaim,
     Report,
     Restaurant,
+    RestaurantImportSource,
     RestaurantAllergenInfo,
     RestaurantTag,
     TrustEvent,
@@ -14,6 +15,7 @@ from backend.app.models.entities import (
 __all__ = [
     "User",
     "Restaurant",
+    "RestaurantImportSource",
     "RestaurantTag",
     "RestaurantAllergenInfo",
     "Report",

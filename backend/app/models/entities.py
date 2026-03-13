@@ -37,6 +37,9 @@ class Restaurant(Base):
     allergen_info: Mapped[list[RestaurantAllergenInfo]] = relationship(
         back_populates="restaurant", cascade="all, delete-orphan"
     )
+    source_records: Mapped[list[RestaurantImportSource]] = relationship(
+        back_populates="restaurant", cascade="all, delete-orphan"
+    )
 
 
 class RestaurantTag(Base):
@@ -60,6 +63,23 @@ class RestaurantAllergenInfo(Base):
     present: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     restaurant: Mapped[Restaurant] = relationship(back_populates="allergen_info")
+
+
+class RestaurantImportSource(Base):
+    __tablename__ = "restaurant_import_sources"
+    __table_args__ = (
+        UniqueConstraint("source_name", "source_id", name="uq_restaurant_import_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    freshness_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    raw_source_payload: Mapped[str] = mapped_column(Text, nullable=False)
+
+    restaurant: Mapped[Restaurant] = relationship(back_populates="source_records")
 
 
 class Report(Base):
