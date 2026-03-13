@@ -16,8 +16,6 @@ const emit = defineEmits<{
 }>()
 
 
-const distanceLabel = computed(() => formatDistanceKm(props.result.distance_km))
-
 const trustBadgeClass = computed(() => {
   if (props.result.trust_level === 'high') return 'bg-emerald-100 text-emerald-800'
   if (props.result.trust_level === 'medium') return 'bg-amber-100 text-amber-800'
