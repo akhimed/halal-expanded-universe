@@ -36,6 +36,12 @@ docker compose exec backend alembic -c backend/alembic.ini upgrade head
 docker compose exec backend python -m backend.scripts.seed_dev_data
 ```
 
+Optional (preferred for realistic local data): run a real OSM import after migrations:
+
+```bash
+docker compose exec backend python -m backend.scripts.import_restaurants --mode city --query "Toronto"
+```
+
 4) Verify locally:
 
 ```bash
@@ -98,6 +104,39 @@ Notes:
 - Run migrations before seeding.
 - Seed script is safe to rerun for local development bootstrapping (idempotent upsert by email/name; no duplicate demo rows).
 - Seed data now includes 16 restaurants spanning halal, kosher, vegan, vegetarian, hindu_vegetarian, mixed-concept, high/low-trust, and conflicting/incomplete trust-signal edge cases for realistic local demos.
+- Real ingestion is now the preferred path for local product exploration; seed data remains available for deterministic demos/tests.
+
+
+## Real restaurant ingestion (OSM/Nominatim/Overpass)
+
+The backend now supports provider-based ingestion, with an initial `osm` provider using:
+- Nominatim for geocoding city/postal queries into bounding boxes
+- Overpass for restaurant place extraction
+
+### Import modes
+
+- `city` (`--query "City Name"`)
+- `postal_code` (`--query "10001"` and optional `--country-code us`)
+- `bbox` (`--min-lat ... --min-lon ... --max-lat ... --max-lon ...`)
+- `radius` (`--latitude ... --longitude ... --radius-km ...`)
+
+### Local script examples
+
+```bash
+# City import
+python -m backend.scripts.import_restaurants --mode city --query "Toronto"
+
+# Postal code import
+python -m backend.scripts.import_restaurants --mode postal_code --query "10001" --country-code us
+
+# Bounding box import
+python -m backend.scripts.import_restaurants --mode bbox --min-lat 43.62 --min-lon -79.45 --max-lat 43.72 --max-lon -79.30
+
+# Radius import
+python -m backend.scripts.import_restaurants --mode radius --latitude 43.6532 --longitude -79.3832 --radius-km 3
+```
+
+Imported source metadata is stored in `restaurant_import_sources` with source name/id, timestamps, and raw provider payload to support auditability and re-import freshness tracking.
 
 ## Running tests/checks
 
@@ -182,6 +221,8 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /restaurants`
 - `GET /restaurants/{id}`
 - `POST /search`
+- `GET /admin/import/providers` (admin)
+- `POST /admin/import/restaurants` (admin)
 - `GET /favorites` (auth)
 - `POST /favorites/{restaurant_id}` (auth)
 - `DELETE /favorites/{restaurant_id}` (auth)

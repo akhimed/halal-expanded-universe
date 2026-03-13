@@ -283,3 +283,34 @@ class SearchLocationSchema(BaseModel):
 class SearchResponseSchema(BaseModel):
     results: List[SearchResultSchema]
     search_location: SearchLocationSchema | None = None
+
+
+IngestionModeLiteral = Literal["city", "postal_code", "bbox", "radius"]
+
+
+class AdminImportRequest(BaseModel):
+    provider: str = Field(default="osm", min_length=1, max_length=64)
+    mode: IngestionModeLiteral
+    query: str | None = Field(default=None, max_length=200)
+    min_lat: float | None = Field(default=None, ge=-90, le=90)
+    min_lon: float | None = Field(default=None, ge=-180, le=180)
+    max_lat: float | None = Field(default=None, ge=-90, le=90)
+    max_lon: float | None = Field(default=None, ge=-180, le=180)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    radius_km: float | None = Field(default=None, gt=0, le=250)
+    country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class AdminImportResponse(BaseModel):
+    provider: str
+    mode: IngestionModeLiteral
+    created_count: int
+    updated_count: int
+    skipped_count: int
+    imported_restaurant_ids: List[int]
+
+
+class AdminProvidersResponse(BaseModel):
+    providers: List[str]
