@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models import AuditLog, OwnerClaim, Restaurant, User
+from backend.app.services.trust_evidence_service import create_trust_evidence
 
 OWNER_CLAIM_STATUSES = {"pending", "approved", "rejected"}
 
@@ -17,6 +18,8 @@ def submit_owner_claim(
     current_user: User,
     restaurant: Restaurant,
     notes: str | None,
+    claim_key: str = "listing_claim",
+    source_url: str | None = None,
 ) -> OwnerClaim:
     existing = db.scalars(
         select(OwnerClaim).where(
@@ -51,6 +54,18 @@ def submit_owner_claim(
         ),
     )
     db.add(audit)
+    create_trust_evidence(
+        db,
+        restaurant_id=restaurant.id,
+        claim_key=claim_key,
+        evidence_type="owner_submitted_claim",
+        stance="supports",
+        status="pending",
+        confidence_weight=0.8,
+        source_label=current_user.email,
+        source_url=source_url,
+        summary=notes,
+    )
     db.commit()
     db.refresh(claim)
     return claim

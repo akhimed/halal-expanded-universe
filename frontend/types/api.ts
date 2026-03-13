@@ -92,6 +92,16 @@ export interface TrustBreakdown {
   contradiction_penalty: number
   event_delta: number
   recency_component: number
+  evidence_net: number
+  evidence_freshness: number
+  evidence_counts: {
+    total: number
+    approved: number
+    supports: number
+    contradictions: number
+  }
+  evidence_by_type: Record<string, { count: number; impact: number }>
+  conflicting_claims: boolean
   final_score: number
   trust_level: 'high' | 'medium' | 'low'
   low_confidence: boolean
@@ -108,7 +118,7 @@ export interface RestaurantDetail {
   certification_score: number
   community_verification_score: number
   recency_score: number
-  trust_breakdown?: Record<string, number | string | string[]>
+  trust_breakdown?: TrustBreakdown
   owner_claim_status?: OwnerClaimStatus | null
   photo_url?: string | null
   photos?: { url: string; caption?: string | null }[]
@@ -200,4 +210,24 @@ export interface ModerationOwnerClaimItem {
   status: OwnerClaimStatus
   notes: string | null
   created_at: string
+}
+
+export interface TrustEvidenceItem {
+  id: number
+  restaurant_id: number
+  claim_key: string
+  evidence_type: string
+  stance: 'supports' | 'contradicts' | 'neutral'
+  status: 'pending' | 'approved' | 'rejected'
+  source_label: string | null
+  source_url: string | null
+  summary: string | null
+  confidence_weight: number
+  captured_at: string
+  created_at: string
+}
+
+export interface TrustEvidenceListResponse {
+  evidence: TrustEvidenceItem[]
+  pagination?: { total: number; limit: number; offset: number }
 }

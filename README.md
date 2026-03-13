@@ -196,7 +196,14 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 - `POST /owner/claims/{claim_id}/verification-documents` (auth)
 - `GET /moderation/verification-documents` (moderator/admin)
 - `PATCH /moderation/verification-documents/{document_id}` (moderator/admin)
+- `GET /moderation/trust-evidence` (moderator/admin)
+- `PATCH /moderation/trust-evidence/{evidence_id}` (moderator/admin)
+- `POST /moderation/trust-evidence/manual-note` (moderator/admin)
 - `GET /restaurants/{id}/trust-events`
+
+`POST /restaurants/{restaurant_id}/claims` now accepts optional evidence metadata fields:
+- `claim_key` (example: `halal_status`, `kosher_status`, `allergen_handling`)
+- `source_url` (supporting source link for owner-submitted claim evidence)
 
 Search example:
 

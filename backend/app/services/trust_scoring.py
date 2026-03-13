@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models import Report, Restaurant, TrustEvent, VerificationDocument
+from backend.app.models import Report, Restaurant, TrustEvidence, TrustEvent, VerificationDocument
+
+EVIDENCE_TYPE_WEIGHT = {
+    "imported_source_signal": 0.06,
+    "owner_submitted_claim": 0.03,
+    "owner_submitted_document": 0.08,
+    "moderator_approval": 0.1,
+    "community_report": 0.04,
+    "contradiction_report": 0.08,
+    "manual_note": 0.02,
+}
 
 
 @dataclass(frozen=True)
@@ -87,7 +98,40 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
     moderation_approval = 0.1 if approved_docs > 0 else 0.0
     contradiction_penalty = min(0.2, contradiction_count * 0.05)
 
-    final_score = max(0.0, min(1.0, base + owner_verification_submitted + moderation_approval - contradiction_penalty + event_delta))
+    evidence_rows = list(db.scalars(select(TrustEvidence).where(TrustEvidence.restaurant_id == restaurant.id)).all())
+    now = datetime.now(timezone.utc)
+    evidence_net = 0.0
+    evidence_support_count = 0
+    evidence_contradiction_count = 0
+    evidence_by_type: dict[str, dict[str, float | int]] = {}
+    freshness_sum = 0.0
+    approved_count = 0
+    for row in evidence_rows:
+        age_days = max(0.0, (now - row.captured_at.replace(tzinfo=timezone.utc)).total_seconds() / 86400.0)
+        freshness = max(0.25, 1.0 - (age_days / 365.0))
+        freshness_sum += freshness
+        status_weight = 1.0 if row.status == "approved" else (0.55 if row.status == "pending" else 0.0)
+        if row.status == "approved":
+            approved_count += 1
+        stance_multiplier = 1.0 if row.stance == "supports" else (-1.0 if row.stance == "contradicts" else 0.0)
+        if row.stance == "supports":
+            evidence_support_count += 1
+        if row.stance == "contradicts":
+            evidence_contradiction_count += 1
+        base_weight = EVIDENCE_TYPE_WEIGHT.get(row.evidence_type, 0.03)
+        contribution = base_weight * stance_multiplier * status_weight * freshness * row.confidence_weight
+        evidence_net += contribution
+        bucket = evidence_by_type.setdefault(row.evidence_type, {"count": 0, "impact": 0.0})
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["impact"] = round(float(bucket["impact"]) + contribution, 4)
+
+    evidence_freshness = round((freshness_sum / len(evidence_rows)) if evidence_rows else 0.0, 4)
+    conflicting_claims = evidence_support_count > 0 and evidence_contradiction_count > 0
+
+    final_score = max(
+        0.0,
+        min(1.0, base + owner_verification_submitted + moderation_approval - contradiction_penalty + event_delta + evidence_net),
+    )
 
     final_score = round(final_score, 4)
     level = trust_level(final_score)
@@ -96,6 +140,8 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
         contradiction_penalty=contradiction_penalty,
         approved_docs=approved_docs,
         final_score=final_score,
+        evidence_freshness=evidence_freshness,
+        conflicting_claims=conflicting_claims,
     )
 
     return {
@@ -107,9 +153,19 @@ def trust_breakdown(db: Session, restaurant: Restaurant, profile: RankingProfile
         "contradiction_penalty": round(contradiction_penalty, 4),
         "event_delta": round(event_delta, 4),
         "recency_component": round(profile.recency_weight * restaurant.recency_score, 4),
+        "evidence_net": round(evidence_net, 4),
+        "evidence_freshness": evidence_freshness,
+        "evidence_counts": {
+            "total": len(evidence_rows),
+            "approved": approved_count,
+            "supports": evidence_support_count,
+            "contradictions": evidence_contradiction_count,
+        },
+        "evidence_by_type": evidence_by_type,
+        "conflicting_claims": conflicting_claims,
         "final_score": final_score,
         "trust_level": level,
-        "low_confidence": level == "low",
+        "low_confidence": level == "low" or evidence_freshness < 0.5,
         "caveats": caveats,
     }
 
@@ -143,7 +199,15 @@ def trust_score_band_label(level: str) -> str:
         return "Medium trust"
     return "Low trust"
 
-def trust_caveats(*, recency_score: float, contradiction_penalty: float, approved_docs: int, final_score: float) -> list[str]:
+def trust_caveats(
+    *,
+    recency_score: float,
+    contradiction_penalty: float,
+    approved_docs: int,
+    final_score: float,
+    evidence_freshness: float,
+    conflicting_claims: bool,
+) -> list[str]:
     caveats: list[str] = []
 
     if final_score < 0.6:
@@ -154,6 +218,10 @@ def trust_caveats(*, recency_score: float, contradiction_penalty: float, approve
         caveats.append("No moderator-approved owner verification documents are on file yet.")
     if recency_score < 0.6:
         caveats.append("Recent verification activity is limited, so details may be outdated.")
+    if evidence_freshness < 0.5:
+        caveats.append("Most trust evidence is stale; confidence is reduced until newer sources are reviewed.")
+    if conflicting_claims:
+        caveats.append("Conflicting trust evidence exists across sources; moderator resolution is in progress.")
 
     return caveats
 

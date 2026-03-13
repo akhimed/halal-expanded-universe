@@ -8,12 +8,14 @@ from backend.app.api.deps import get_current_user, require_roles
 from backend.app.api.schemas import (
     AuthTokenResponse,
     CreateOwnerClaimRequest,
+    CreateManualTrustEvidenceRequest,
     CreateReportRequest,
     FavoriteActionResponse,
     FavoriteListResponse,
     FavoriteRestaurantSummary,
     LoginRequest,
     ModerateOwnerClaimRequest,
+    ModerateTrustEvidenceRequest,
     ModerateVerificationDocumentRequest,
     ModerationOwnerClaimItem,
     ModerationOwnerClaimsResponse,
@@ -32,6 +34,8 @@ from backend.app.api.schemas import (
     SearchLocationSchema,
     TrustEventResponse,
     TrustEventsListResponse,
+    TrustEvidenceItem,
+    TrustEvidenceListResponse,
     UpdateReportStatusRequest,
     UserRead,
     VerificationDocumentResponse,
@@ -56,6 +60,7 @@ from backend.app.services.restaurant_service import (
 )
 from backend.app.services.rate_limit import auth_rate_limit, report_rate_limit
 from backend.app.services.trust_scoring import PROFILES, trust_breakdown
+from backend.app.services.trust_evidence_service import create_trust_evidence, list_trust_evidence, moderate_trust_evidence
 from backend.app.services.verification_service import (
     list_owner_documents,
     list_verification_documents,
@@ -91,6 +96,23 @@ def _verification_doc_model(doc) -> VerificationDocumentResponse:
         reviewed_by_user_id=doc.reviewed_by_user_id,
         reviewed_at=doc.reviewed_at,
         created_at=doc.created_at,
+    )
+
+
+def _trust_evidence_model(row) -> TrustEvidenceItem:
+    return TrustEvidenceItem(
+        id=row.id,
+        restaurant_id=row.restaurant_id,
+        claim_key=row.claim_key,
+        evidence_type=row.evidence_type,
+        stance=row.stance,
+        status=row.status,
+        source_label=row.source_label,
+        source_url=row.source_url,
+        summary=row.summary,
+        confidence_weight=row.confidence_weight,
+        captured_at=row.captured_at,
+        created_at=row.created_at,
     )
 
 
@@ -191,6 +213,8 @@ def submit_restaurant_claim(
         current_user=current_user,
         restaurant=restaurant,
         notes=payload.notes,
+        claim_key=payload.claim_key,
+        source_url=str(payload.source_url) if payload.source_url else None,
     )
     return OwnerClaimStatusResponse(
         id=claim.id,
@@ -402,6 +426,58 @@ def moderation_update_verification_document(
         note=payload.note,
     )
     return _verification_doc_model(doc)
+
+
+@router.get("/moderation/trust-evidence", response_model=TrustEvidenceListResponse)
+def moderation_trust_evidence(
+    status: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    moderator: User = Depends(require_roles("moderator", "admin")),
+) -> TrustEvidenceListResponse:
+    _ = moderator
+    rows = list_trust_evidence(db, status=status)
+    total = len(rows)
+    page_rows = rows[offset : offset + limit]
+    return TrustEvidenceListResponse(
+        evidence=[_trust_evidence_model(row) for row in page_rows],
+        pagination={"total": total, "limit": limit, "offset": offset},
+    )
+
+
+@router.patch("/moderation/trust-evidence/{evidence_id}", response_model=TrustEvidenceItem)
+def moderation_update_trust_evidence(
+    evidence_id: int,
+    payload: ModerateTrustEvidenceRequest,
+    db: Session = Depends(get_db),
+    moderator: User = Depends(require_roles("moderator", "admin")),
+) -> TrustEvidenceItem:
+    row = moderate_trust_evidence(db, moderator=moderator, evidence_id=evidence_id, status=payload.status)
+    return _trust_evidence_model(row)
+
+
+@router.post("/moderation/trust-evidence/manual-note", response_model=TrustEvidenceItem)
+def moderation_create_manual_trust_evidence(
+    payload: CreateManualTrustEvidenceRequest,
+    db: Session = Depends(get_db),
+    moderator: User = Depends(require_roles("moderator", "admin")),
+) -> TrustEvidenceItem:
+    row = create_trust_evidence(
+        db,
+        restaurant_id=payload.restaurant_id,
+        claim_key=payload.claim_key,
+        evidence_type="manual_note",
+        stance=payload.stance,
+        status="approved",
+        confidence_weight=payload.confidence_weight,
+        source_label=payload.source_label or f"moderator:{moderator.id}",
+        source_url=str(payload.source_url) if payload.source_url else None,
+        summary=payload.summary,
+    )
+    db.commit()
+    db.refresh(row)
+    return _trust_evidence_model(row)
 
 
 @router.post("/restaurants/{restaurant_id}/reports", response_model=ReportResponse)

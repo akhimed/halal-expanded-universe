@@ -99,6 +99,8 @@ class UpdateReportStatusRequest(BaseModel):
 
 class CreateOwnerClaimRequest(BaseModel):
     notes: str | None = None
+    claim_key: str = Field(default="listing_claim", min_length=2, max_length=64)
+    source_url: AnyUrl | None = None
 
 
 class OwnerClaimStatusResponse(BaseModel):
@@ -179,6 +181,40 @@ class TrustEventResponse(BaseModel):
 
 class TrustEventsListResponse(BaseModel):
     events: List[TrustEventResponse]
+
+
+class TrustEvidenceItem(BaseModel):
+    id: int
+    restaurant_id: int
+    claim_key: str
+    evidence_type: str
+    stance: str
+    status: str
+    source_label: str | None
+    source_url: str | None
+    summary: str | None
+    confidence_weight: float
+    captured_at: datetime
+    created_at: datetime
+
+
+class TrustEvidenceListResponse(BaseModel):
+    evidence: List[TrustEvidenceItem]
+    pagination: dict[str, int] | None = None
+
+
+class ModerateTrustEvidenceRequest(BaseModel):
+    status: Literal["approved", "rejected"]
+
+
+class CreateManualTrustEvidenceRequest(BaseModel):
+    restaurant_id: int
+    claim_key: str = Field(min_length=2, max_length=64)
+    stance: Literal["supports", "contradicts", "neutral"]
+    summary: str | None = Field(default=None, max_length=2000)
+    source_label: str | None = Field(default=None, max_length=255)
+    source_url: AnyUrl | None = None
+    confidence_weight: float = Field(default=0.8, ge=0.0, le=1.5)
 
 
 class RestaurantTagRead(BaseModel):

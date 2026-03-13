@@ -131,6 +131,23 @@ class TrustEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class TrustEvidence(Base):
+    __tablename__ = "trust_evidence"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False)
+    claim_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    stance: Mapped[str] = mapped_column(String(16), default="supports", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    source_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence_weight: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
