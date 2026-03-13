@@ -376,3 +376,49 @@ def test_distance_aware_ranking_prefers_nearby_when_location_provided(client: Te
     assert len(results) == 3
     assert results[0]['restaurant']['name'] == 'Halal House'
     assert results[0]['distance_km'] <= results[1]['distance_km']
+
+
+def test_group_mode_requires_participants(client: TestClient):
+    response = client.post(
+        "/search",
+        json={
+            "group_mode": True,
+            "participants": [],
+            "profile": "balanced",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_search_rejects_partial_coordinates(client: TestClient):
+    response = client.post(
+        "/search",
+        json={
+            "required_tags": [],
+            "excluded_allergens": [],
+            "profile": "balanced",
+            "location_latitude": 43.7,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_search_accepts_explicit_coordinates(client: TestClient):
+    response = client.post(
+        "/search",
+        json={
+            "required_tags": ["vegetarian"],
+            "excluded_allergens": [],
+            "profile": "balanced",
+            "location_query": "Toronto",
+            "location_latitude": 43.651,
+            "location_longitude": -79.347,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["search_location"]["query"] == "Toronto"
+    assert body["results"][0]["distance_km"] is not None

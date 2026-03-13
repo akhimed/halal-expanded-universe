@@ -13,7 +13,7 @@ This validates:
 - Backend health endpoint responds
 - Alembic migrations apply
 - Seed script runs
-- Search endpoint accepts a basic request
+- Search endpoint accepts basic and group/location-aware requests
 - Frontend responds on port 3000
 
 ## Manual path
@@ -49,6 +49,9 @@ curl -fsS http://localhost:8000/restaurants >/dev/null
 curl -fsS -X POST http://localhost:8000/search \
   -H 'Content-Type: application/json' \
   -d '{"required_tags":["halal"],"excluded_allergens":["shellfish"],"profile":"balanced"}' >/dev/null
+curl -fsS -X POST http://localhost:8000/search \
+  -H 'Content-Type: application/json' \
+  -d '{"group_mode":true,"participants":[{"participant_name":"A","required_tags":["halal"],"excluded_allergens":["dairy"],"profile":"balanced"}],"profile":"balanced","location_latitude":43.651,"location_longitude":-79.347}' >/dev/null
 curl -fsS http://localhost:3000 >/dev/null
 ```
 

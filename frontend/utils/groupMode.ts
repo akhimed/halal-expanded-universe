@@ -31,7 +31,7 @@ export function summarizeParticipantSatisfaction(participant: ParticipantSatisfa
   const hasTagTradeoff = !participant.required_tags_satisfied
   const hasAllergenTradeoff = !participant.excluded_allergens_satisfied
 
-  if (fitScore >= 80 && !hasTagTradeoff && !hasAllergenTradeoff) {
+  if (fitScore >= 0.8 && !hasTagTradeoff && !hasAllergenTradeoff) {
     return {
       fitLabel: 'Strong fit',
       fitClass: 'text-emerald-700 bg-emerald-50 border-emerald-200',
@@ -39,7 +39,7 @@ export function summarizeParticipantSatisfaction(participant: ParticipantSatisfa
     }
   }
 
-  if (fitScore >= 50) {
+  if (fitScore >= 0.5) {
     return {
       fitLabel: 'Partial fit',
       fitClass: 'text-amber-700 bg-amber-50 border-amber-200',
