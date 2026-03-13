@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Literal
 
-from pydantic import AnyUrl, BaseModel, EmailStr, Field
+from pydantic import AnyUrl, BaseModel, EmailStr, Field, model_validator
 
 
 SearchProfileLiteral = Literal["balanced", "strict", "community_first"]
@@ -219,8 +219,20 @@ class SearchRequestSchema(BaseModel):
     group_mode: bool = False
     participants: List[GroupParticipantSchema] = Field(default_factory=list)
     location_query: str | None = Field(default=None, max_length=200)
-    location_latitude: float | None = None
-    location_longitude: float | None = None
+    location_latitude: float | None = Field(default=None, ge=-90, le=90)
+    location_longitude: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def validate_cross_field_inputs(self) -> "SearchRequestSchema":
+        if self.group_mode and len(self.participants) == 0:
+            raise ValueError("participants are required when group_mode is true")
+
+        has_lat = self.location_latitude is not None
+        has_lng = self.location_longitude is not None
+        if has_lat != has_lng:
+            raise ValueError("location_latitude and location_longitude must be provided together")
+
+        return self
 
 
 class RestaurantSummarySchema(BaseModel):

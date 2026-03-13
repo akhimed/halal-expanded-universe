@@ -8,7 +8,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/smoke_local.sh [--bootstrap-env] [--keep-running]
 
-Runs a local smoke test for docker-compose startup, backend health, migrations, and seed flow.
+Runs a local smoke test for docker-compose startup, backend health, migrations, seed flow, and key search integrations.
 
 Options:
   --bootstrap-env  Copy .env files from examples if they do not exist.
@@ -90,6 +90,9 @@ curl -fsS http://localhost:8000/restaurants >/dev/null
 curl -fsS -X POST http://localhost:8000/search \
   -H 'Content-Type: application/json' \
   -d '{"required_tags":["halal"],"excluded_allergens":["shellfish"],"profile":"balanced"}' >/dev/null
+curl -fsS -X POST http://localhost:8000/search \
+  -H 'Content-Type: application/json' \
+  -d '{"group_mode":true,"participants":[{"participant_name":"A","required_tags":["halal"],"excluded_allergens":["dairy"],"profile":"balanced"}],"profile":"balanced","location_latitude":43.651,"location_longitude":-79.347}' >/dev/null
 curl -fsS http://localhost:3000 >/dev/null
 
 echo "✅ Local smoke test passed"

@@ -2,6 +2,7 @@
 import type { SearchResult } from '~/types/api'
 import { summarizeGroupTradeoffs, summarizeParticipantSatisfaction } from '~/utils/groupMode'
 import { formatDistanceKm } from '~/utils/location'
+import { scoreToPercent } from '~/utils/score'
 
 const props = defineProps<{
   result: SearchResult
@@ -24,11 +25,14 @@ const trustBadgeClass = computed(() => {
 
 const distanceLabel = computed(() => formatDistanceKm(props.result.distance_km))
 
+const trustScorePercent = computed(() => scoreToPercent(props.result.trust_score) ?? 0)
+const groupFitPercent = computed(() => scoreToPercent(props.result.group_fit_score) ?? 0)
+
 const groupFitBadgeClass = computed(() => {
   const score = props.result.group_fit_score
   if (score === null || score === undefined) return 'bg-slate-100 text-slate-700'
-  if (score >= 80) return 'bg-emerald-100 text-emerald-800'
-  if (score >= 50) return 'bg-amber-100 text-amber-800'
+  if (score >= 0.8) return 'bg-emerald-100 text-emerald-800'
+  if (score >= 0.5) return 'bg-amber-100 text-amber-800'
   return 'bg-rose-100 text-rose-800'
 })
 
@@ -55,14 +59,14 @@ const groupSummary = computed(() => summarizeGroupTradeoffs(props.result))
       </div>
       <div class="flex flex-col items-end gap-2">
         <span class="rounded-full px-3 py-1 text-sm font-medium" :class="trustBadgeClass">
-          Trust {{ result.trust_score }}/100 · {{ result.trust_level }}
+          Trust {{ trustScorePercent }}% · {{ result.trust_level }}
         </span>
         <span
           v-if="result.group_fit_score !== null && result.group_fit_score !== undefined"
           class="rounded-full px-3 py-1 text-xs font-medium"
           :class="groupFitBadgeClass"
         >
-          Group fit {{ result.group_fit_score }}/100
+          Group fit {{ groupFitPercent }}%
         </span>
         <button
           class="rounded-md border px-2 py-1 text-xs"
@@ -133,7 +137,7 @@ const groupSummary = computed(() => summarizeGroupTradeoffs(props.result))
             class="rounded-full border px-2 py-0.5 text-[11px] font-medium"
             :class="summarizeParticipantSatisfaction(participant).fitClass"
           >
-            {{ summarizeParticipantSatisfaction(participant).fitLabel }} · {{ participant.participant_fit_score }}/100
+            {{ summarizeParticipantSatisfaction(participant).fitLabel }} · {{ scoreToPercent(participant.participant_fit_score) ?? 0 }}%
           </span>
         </div>
         <p class="mt-1 text-slate-600">{{ summarizeParticipantSatisfaction(participant).tradeoffSummary }}</p>

@@ -227,6 +227,15 @@ curl -s -X POST http://localhost:8000/search \
 
 Results include `group_fit_score` and `participant_satisfaction` so each participant's constraints are explainable.
 
+Location-aware ranking notes:
+- Provide both `location_latitude` **and** `location_longitude` together (or omit both).
+- If coordinates are provided, backend uses them directly and does not call geocoding.
+- If `location_query` is provided without coordinates, backend resolves it via Nominatim.
+
+Scoring scale notes:
+- `trust_score`, `group_fit_score`, and participant `participant_fit_score` are normalized decimals from `0.0` to `1.0`.
+- Frontend displays these values as percentages for readability.
+
 ### `/search` response schema
 
 `POST /search` returns:

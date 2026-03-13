@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -43,13 +44,17 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    details = jsonable_encoder(
+        exc.errors(),
+        custom_encoder={ValueError: lambda value: str(value), Exception: lambda value: str(value)},
+    )
     return JSONResponse(
         status_code=422,
         content={
             "error": {
                 "code": "validation_error",
                 "message": "Invalid request payload",
-                "details": exc.errors(),
+                "details": details,
             }
         },
     )

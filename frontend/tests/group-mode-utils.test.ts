@@ -30,7 +30,7 @@ describe('group mode helpers', () => {
       excluded_allergens_satisfied: true,
       conflicting_allergens: [],
       profile: 'strict',
-      participant_fit_score: 65
+      participant_fit_score: 0.65
     })
 
     expect(summary.fitLabel).toBe('Partial fit')
@@ -42,10 +42,10 @@ describe('group mode helpers', () => {
       restaurant: { id: 1, name: 'Demo', description: null, address: null, latitude: null, longitude: null },
       matched_tags: [],
       excluded_allergen_status: [],
-      trust_score: 75,
+      trust_score: 0.75,
       trust_level: 'medium',
       trust_caveats: [],
-      group_fit_score: 70,
+      group_fit_score: 0.7,
       participant_satisfaction: [
         {
           participant_name: 'A',
@@ -54,7 +54,7 @@ describe('group mode helpers', () => {
           excluded_allergens_satisfied: true,
           conflicting_allergens: [],
           profile: 'balanced',
-          participant_fit_score: 92
+          participant_fit_score: 0.92
         },
         {
           participant_name: 'B',
@@ -63,7 +63,7 @@ describe('group mode helpers', () => {
           excluded_allergens_satisfied: true,
           conflicting_allergens: [],
           profile: 'balanced',
-          participant_fit_score: 60
+          participant_fit_score: 0.6
         }
       ],
       explanation: 'x',
