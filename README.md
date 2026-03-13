@@ -102,6 +102,7 @@ python -m backend.scripts.seed_dev_data
 
 Notes:
 - Run migrations before seeding.
+- If you add migrations, ensure there is a single Alembic head before merging changes: `alembic -c backend/alembic.ini heads`.
 - Seed script is safe to rerun for local development bootstrapping (idempotent upsert by email/name; no duplicate demo rows).
 - Seed data now includes 16 restaurants spanning halal, kosher, vegan, vegetarian, hindu_vegetarian, mixed-concept, high/low-trust, and conflicting/incomplete trust-signal edge cases for realistic local demos.
 - Real ingestion is now the preferred path for local product exploration; seed data remains available for deterministic demos/tests.

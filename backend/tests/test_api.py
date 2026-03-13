@@ -177,6 +177,18 @@ def test_migration_and_seed_smoke(tmp_path: Path):
     assert user_count == 2
 
 
+def test_alembic_has_single_head_after_merge():
+    result = subprocess.run(
+        ["alembic", "-c", "backend/alembic.ini", "heads"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    head_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    assert head_lines == ["0006_merge_heads (head)"]
+
+
 def test_seed_data_covers_diverse_tags_and_trust_edges(tmp_path: Path):
     db_file = tmp_path / "seed_diversity.db"
     db_url = f"sqlite:///{db_file}"
