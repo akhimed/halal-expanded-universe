@@ -13,6 +13,67 @@ This repo has two tracks:
 - Python 3.11+ (for running tests outside containers)
 - Node.js 20+ (for frontend checks outside containers)
 
+## Project governance addendum
+
+The sections below provide implementation-ready detail for planning and delivery controls that were previously too brief.
+
+### Project scope and acceptance criteria
+
+#### In scope
+- Restaurant discovery based on faith + dietary constraints using deterministic matching (`halal`, `kosher`, `hindu_vegetarian`, `vegan`, `vegetarian`) and supported allergens.
+- Explainable search responses that include matched tags, allergen handling, trust score inputs, and user-facing rationale.
+- Local-first development via Docker Compose (`frontend`, `backend`, `postgres`) with stable startup, migrations, and seed/import flows.
+- Moderation and owner-claim workflows that improve trust evidence quality over time.
+
+#### Out of scope (current phase)
+- Non-deterministic/LLM-driven recommendation ranking.
+- Production cloud deployment hardening beyond local/dev workflows.
+- Fully automated third-party certification verification integrations not already implemented.
+
+#### Acceptance criteria
+- **AC1 — Local startup:** `docker compose up --build -d` succeeds and `/health` responds successfully.
+- **AC2 — Data lifecycle:** Alembic migrations apply cleanly and seed/import scripts run without schema drift.
+- **AC3 — Trustworthy matching:** `/search` results remain deterministic for identical inputs and continue returning explainable fields.
+- **AC4 — Frontend compatibility:** Browser-side frontend requests to localhost backend continue to work in local development.
+- **AC5 — Security/roles baseline:** Auth-protected endpoints enforce role checks for admin/moderation and owner workflows.
+
+### Risk and communication management plan
+
+#### Risk register
+
+| Risk | Impact | Likelihood | Mitigation | Trigger/owner |
+|---|---|---|---|---|
+| Docker/local startup regression | High | Medium | Keep smoke script green; avoid breaking compose service contracts | Trigger: failed `make smoke-local`; Owner: feature author |
+| Migration drift or invalid revision chain | High | Medium | Require `alembic ... upgrade head` + `alembic ... heads` checks in PR validation | Trigger: multiple heads/revision errors; Owner: backend maintainer |
+| Deterministic ranking regressions | High | Low/Medium | Preserve engine tests and add API tests for changed search behavior | Trigger: test snapshot/ordering diffs; Owner: backend maintainer |
+| CORS/browser integration breakage | High | Medium | Keep local frontend↔backend smoke checks and avoid CORS middleware regressions | Trigger: browser CORS/network errors; Owner: full-stack author |
+| Data quality/trust-signal inconsistency | Medium | Medium | Use moderation queues, audit logs, and explicit trust evidence updates | Trigger: report volume increase or moderation backlog; Owner: moderation/admin |
+
+#### Communication cadence
+- **Per PR:** concise summary of changed files, exact commands run, known limitations, and rollback considerations.
+- **Daily/working-session updates (for active streams):** short status on completed work, next task, and blockers.
+- **Release readiness checkpoint:** confirm acceptance criteria above and smoke checklist completion before merge to main release line.
+- **Incident communication:** when local stack stability breaks, post issue summary, reproduction command, and mitigation status before unrelated work continues.
+
+### Timesheet validation
+
+Use lightweight, auditable time entries for implementation work:
+
+- Each work session logs: date, contributor, task/issue reference, start/end time, elapsed duration, and output artifact (PR/commit/test evidence).
+- Validation requires:
+  - a linked code artifact (commit hash or PR),
+  - at least one reproducible command executed for the task,
+  - explicit note of rework time if a task required rollback/fix-forward.
+- Suggested weekly roll-up fields: planned hours, actual hours, variance, root cause, and preventive action.
+- If no code changed in a session (analysis-only), record outcomes and decisions with referenced files/issues.
+
+### Citations and references
+
+- For internal documentation and PR summaries, cite repository files directly (for example: `README.md`, `ARCHITECTURE.md`, `docs/local-smoke-checklist.md`) and include command evidence used for verification.
+- For external sources (e.g., OSM/Nominatim/Overpass behavior), include source URL + access date in the PR description or related design note.
+- Keep references reproducible: prefer exact commands over narrative-only statements.
+- When behavior claims are made (startup reliability, migration validity, endpoint behavior), pair them with the exact local command that verified the claim.
+
 ### Quick start (fresh clone)
 
 1) Copy env files:
