@@ -107,3 +107,35 @@ def test_owner_dashboard_lists_claims(client_and_session):
     assert len(payload["claims"]) == 1
     assert payload["claims"][0]["status"] == "pending"
     assert payload["claims"][0]["restaurant"]["name"] == "Claimable Listing"
+    assert "trust_score" in payload["claims"][0]
+    assert payload["claims"][0]["evidence_status"]["pending"] >= 0
+    assert isinstance(payload["claims"][0]["pending_moderation_items"], list)
+    assert payload["pending_moderation_total"] >= 1
+
+
+def test_owner_can_submit_certification_evidence(client_and_session):
+    client, _ = client_and_session
+    token = _register_and_token(client)
+
+    submit = client.post(
+        "/restaurants/1/claims",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"notes": "claim note"},
+    )
+    assert submit.status_code == 200
+    claim_id = submit.json()["id"]
+
+    evidence = client.post(
+        f"/owner/claims/{claim_id}/certification-evidence",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "certification_type": (None, "halal"),
+            "notes": (None, "Current cert attached"),
+            "file": ("halal-cert.pdf", b"dummy-pdf", "application/pdf"),
+        },
+    )
+
+    assert evidence.status_code == 200
+    payload = evidence.json()
+    assert payload["document_type"] == "halal_certificate"
+    assert payload["status"] == "pending"

@@ -155,10 +155,15 @@ export interface OwnerDashboardClaim {
   notes: string | null
   created_at: string
   restaurant: RestaurantSummary
+  trust_score: number
+  trust_level: "high" | "medium" | "low"
+  evidence_status: { pending: number; approved: number; rejected: number }
+  pending_moderation_items: string[]
 }
 
 export interface OwnerDashboardResponse {
   claims: OwnerDashboardClaim[]
+  pending_moderation_total: number
 }
 
 export interface VerificationDocument {

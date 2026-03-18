@@ -111,6 +111,14 @@ export const useApiClient = () => {
     })
   }
 
+  const submitCertificationEvidence = async (claimId: number, payload: FormData) => {
+    return await $fetch<VerificationDocument>(`${baseURL}/owner/claims/${claimId}/certification-evidence`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: payload
+    })
+  }
+
   const listModerationReports = async (params?: { limit?: number; offset?: number }) => {
     return await $fetch<ModerationReportsResponse>(`${baseURL}/moderation/reports`, {
       query: params,
@@ -233,6 +241,7 @@ export const useApiClient = () => {
     getOwnerDashboard,
     listOwnerVerificationDocuments,
     submitVerificationDocument,
+    submitCertificationEvidence,
     listModerationReports,
     updateModerationReport,
     listModerationOwnerClaims,

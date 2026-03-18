@@ -17,16 +17,17 @@ const claims = ref<OwnerDashboardClaim[]>([])
 const documents = ref<VerificationDocument[]>([])
 const actionMessage = ref('')
 const selectedStatus = ref<'all' | 'pending' | 'approved' | 'rejected'>('all')
+const pendingModerationTotal = ref(0)
 
-const formByClaim = ref<Record<number, { document_type: string; notes: string; metadata_filename: string; metadata_mime_type: string }>>({})
+const formByClaim = ref<Record<number, { document_type: string; notes: string; certification_type: 'halal' | 'kosher'; file: File | null }>>({})
 
 const initFormForClaim = (claimId: number) => {
   if (!formByClaim.value[claimId]) {
     formByClaim.value[claimId] = {
       document_type: 'business_license',
       notes: '',
-      metadata_filename: '',
-      metadata_mime_type: ''
+      certification_type: 'halal',
+      file: null
     }
   }
 }
@@ -35,6 +36,7 @@ const loadData = async () => {
   try {
     const [dashboard, ownerDocs] = await Promise.all([api.getOwnerDashboard(), api.listOwnerVerificationDocuments()])
     claims.value = dashboard.claims
+    pendingModerationTotal.value = dashboard.pending_moderation_total
     documents.value = ownerDocs.documents
     claims.value.forEach((claim) => initFormForClaim(claim.id))
   } catch (error) {
@@ -46,6 +48,11 @@ const loadData = async () => {
 
 onMounted(loadData)
 
+const onFileSelect = (claimId: number, event: Event) => {
+  const target = event.target as HTMLInputElement
+  formByClaim.value[claimId].file = target.files?.[0] || null
+}
+
 const submitDoc = async (claimId: number) => {
   const form = formByClaim.value[claimId]
   if (!form) return
@@ -53,19 +60,37 @@ const submitDoc = async (claimId: number) => {
   const payload = new FormData()
   payload.append('document_type', form.document_type)
   if (form.notes.trim()) payload.append('notes', form.notes.trim())
-  if (form.metadata_filename.trim()) payload.append('metadata_filename', form.metadata_filename.trim())
-  if (form.metadata_mime_type.trim()) payload.append('metadata_mime_type', form.metadata_mime_type.trim())
+  if (form.file) payload.append('file', form.file)
 
   try {
     await api.submitVerificationDocument(claimId, payload)
     actionMessage.value = `Verification document submitted for claim #${claimId}.`
     form.notes = ''
-    form.metadata_filename = ''
-    form.metadata_mime_type = ''
+    form.file = null
     const ownerDocs = await api.listOwnerVerificationDocuments()
     documents.value = ownerDocs.documents
   } catch (error) {
     actionMessage.value = api.humanizeError(error, 'Failed to submit verification document.')
+  }
+}
+
+const submitCertificationEvidence = async (claimId: number) => {
+  const form = formByClaim.value[claimId]
+  if (!form) return
+  const payload = new FormData()
+  payload.append('certification_type', form.certification_type)
+  if (form.notes.trim()) payload.append('notes', form.notes.trim())
+  if (form.file) payload.append('file', form.file)
+
+  try {
+    await api.submitCertificationEvidence(claimId, payload)
+    actionMessage.value = `${form.certification_type.toUpperCase()} certification evidence submitted for claim #${claimId}.`
+    form.notes = ''
+    form.file = null
+    const ownerDocs = await api.listOwnerVerificationDocuments()
+    documents.value = ownerDocs.documents
+  } catch (error) {
+    actionMessage.value = api.humanizeError(error, 'Failed to submit certification evidence.')
   }
 }
 
@@ -102,10 +127,10 @@ const formatDate = (value: string) => new Date(value).toLocaleString()
   <section class="space-y-4">
     <div class="rounded-xl border bg-white p-6 shadow-sm">
       <h1 class="text-2xl font-bold">Owner Dashboard</h1>
-      <p class="mt-2 text-slate-600">Track ownership claims and submit verification metadata/documents.</p>
+      <p class="mt-2 text-slate-600">Track claims, trust score, evidence status, and moderation queues.</p>
       <p class="mt-1 text-sm text-slate-500">Signed in as: {{ auth.user?.display_name }} ({{ auth.user?.role }})</p>
 
-      <div class="mt-4 grid gap-3 sm:grid-cols-4">
+      <div class="mt-4 grid gap-3 sm:grid-cols-5">
         <div class="rounded-lg border bg-slate-50 p-3">
           <p class="text-xs uppercase text-slate-500">Total claims</p>
           <p class="text-xl font-semibold">{{ claims.length }}</p>
@@ -121,6 +146,10 @@ const formatDate = (value: string) => new Date(value).toLocaleString()
         <div class="rounded-lg border bg-rose-50 p-3">
           <p class="text-xs uppercase text-rose-700">Rejected</p>
           <p class="text-xl font-semibold text-rose-800">{{ claimsByStatus.rejected }}</p>
+        </div>
+        <div class="rounded-lg border bg-blue-50 p-3">
+          <p class="text-xs uppercase text-blue-700">Pending moderation</p>
+          <p class="text-xl font-semibold text-blue-800">{{ pendingModerationTotal }}</p>
         </div>
       </div>
     </div>
@@ -141,10 +170,8 @@ const formatDate = (value: string) => new Date(value).toLocaleString()
             <option value="rejected">Rejected</option>
           </select>
         </div>
-        <div v-if="claims.length === 0" class="text-sm text-slate-600">
-          No owner claims yet. Open a restaurant detail page and click <span class="font-semibold">Claim this listing</span>.
-        </div>
 
+        <div v-if="claims.length === 0" class="text-sm text-slate-600">No owner claims yet.</div>
         <div v-else-if="filteredClaims.length === 0" class="text-sm text-slate-600">No claims match this status.</div>
 
         <div v-else class="space-y-4">
@@ -156,54 +183,55 @@ const formatDate = (value: string) => new Date(value).toLocaleString()
                 </NuxtLink>
                 <p class="text-xs text-slate-500">Claim #{{ claim.id }} · {{ claim.restaurant.address || 'Address unavailable' }}</p>
                 <p class="text-xs text-slate-500">Submitted: {{ formatDate(claim.created_at) }}</p>
+                <p class="text-xs text-slate-700">Trust score: <span class="font-semibold">{{ claim.trust_score.toFixed(3) }}</span> ({{ claim.trust_level }})</p>
+                <p class="text-xs text-slate-700">
+                  Evidence status: pending {{ claim.evidence_status.pending }} · approved {{ claim.evidence_status.approved }} · rejected {{ claim.evidence_status.rejected }}
+                </p>
               </div>
               <span class="rounded-full border px-2 py-1 text-xs" :class="statusClass(claim.status)">{{ claim.status }}</span>
             </div>
 
             <p v-if="claim.notes" class="mt-2 text-sm text-slate-700">Your note: {{ claim.notes }}</p>
 
+            <div class="mt-2 rounded-md border bg-blue-50 p-2 text-sm" v-if="claim.pending_moderation_items.length">
+              <p class="font-medium text-blue-800">Pending moderation items</p>
+              <ul class="ml-4 list-disc text-blue-700">
+                <li v-for="item in claim.pending_moderation_items" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+
             <div v-if="docsByClaim[claim.id]?.length" class="mt-3 rounded-md border bg-slate-50 p-3">
               <p class="mb-2 text-sm font-medium">Submitted verification documents</p>
               <ul class="space-y-1 text-sm text-slate-700">
-                <li v-for="doc in docsByClaim[claim.id]" :key="doc.id">
-                  #{{ doc.id }} · {{ doc.document_type }} · <span class="font-medium">{{ doc.status }}</span>
-                </li>
+                <li v-for="doc in docsByClaim[claim.id]" :key="doc.id">#{{ doc.id }} · {{ doc.document_type }} · <span class="font-medium">{{ doc.status }}</span></li>
               </ul>
             </div>
 
             <div class="mt-3 rounded-md bg-slate-50 p-3">
-              <p class="mb-2 text-sm font-medium">Submit verification document metadata</p>
+              <p class="mb-2 text-sm font-medium">Upload verification document</p>
               <div class="grid gap-2 md:grid-cols-2">
-                <input v-model="formByClaim[claim.id].document_type" class="rounded border px-2 py-1 text-sm" placeholder="document type" />
-                <input v-model="formByClaim[claim.id].metadata_filename" class="rounded border px-2 py-1 text-sm" placeholder="filename (optional)" />
+                <select v-model="formByClaim[claim.id].document_type" class="rounded border px-2 py-1 text-sm">
+                  <option value="business_license">Business license</option>
+                  <option value="owner_id">Owner ID</option>
+                  <option value="other">Other</option>
+                </select>
+                <input type="file" class="rounded border px-2 py-1 text-sm" @change="onFileSelect(claim.id, $event)" />
               </div>
-              <input
-                v-model="formByClaim[claim.id].metadata_mime_type"
-                class="mt-2 w-full rounded border px-2 py-1 text-sm"
-                placeholder="mime type (optional)"
-              />
-              <textarea
-                v-model="formByClaim[claim.id].notes"
-                class="mt-2 w-full rounded border px-2 py-1 text-sm"
-                rows="2"
-                placeholder="notes"
-              />
-              <button class="mt-2 rounded border px-3 py-1 text-xs hover:bg-slate-100" @click="submitDoc(claim.id)">Submit verification metadata</button>
+              <textarea v-model="formByClaim[claim.id].notes" class="mt-2 w-full rounded border px-2 py-1 text-sm" rows="2" placeholder="notes" />
+              <button class="mt-2 rounded border px-3 py-1 text-xs hover:bg-slate-100" @click="submitDoc(claim.id)">Submit verification document</button>
             </div>
-          </article>
-        </div>
-      </section>
 
-      <section class="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 class="mb-3 text-lg font-semibold">Submitted Verification Documents</h2>
-        <div v-if="documents.length === 0" class="text-sm text-slate-600">No verification documents submitted yet.</div>
-        <div v-else class="space-y-2">
-          <article v-for="doc in documents" :key="doc.id" class="rounded-md border p-3 text-sm">
-            <div class="flex items-center justify-between">
-              <p class="font-medium">#{{ doc.id }} · claim {{ doc.owner_claim_id }} · {{ doc.document_type }}</p>
-              <span class="rounded-full border px-2 py-1 text-xs" :class="statusClass(doc.status)">{{ doc.status }}</span>
+            <div class="mt-3 rounded-md bg-emerald-50 p-3">
+              <p class="mb-2 text-sm font-medium">Upload halal / kosher certification evidence</p>
+              <div class="grid gap-2 md:grid-cols-2">
+                <select v-model="formByClaim[claim.id].certification_type" class="rounded border px-2 py-1 text-sm">
+                  <option value="halal">Halal</option>
+                  <option value="kosher">Kosher</option>
+                </select>
+                <input type="file" class="rounded border px-2 py-1 text-sm" @change="onFileSelect(claim.id, $event)" />
+              </div>
+              <button class="mt-2 rounded border px-3 py-1 text-xs hover:bg-emerald-100" @click="submitCertificationEvidence(claim.id)">Submit certification evidence</button>
             </div>
-            <p class="text-slate-600">{{ doc.original_filename || 'metadata only' }}</p>
           </article>
         </div>
       </section>

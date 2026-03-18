@@ -297,12 +297,18 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 - `PATCH /moderation/owner-claims/{claim_id}` (moderator/admin)
 - `GET /owner/verification-documents` (auth)
 - `POST /owner/claims/{claim_id}/verification-documents` (auth)
+- `POST /owner/claims/{claim_id}/certification-evidence` (auth)
 - `GET /moderation/verification-documents` (moderator/admin)
 - `PATCH /moderation/verification-documents/{document_id}` (moderator/admin)
 - `GET /moderation/trust-evidence` (moderator/admin)
 - `PATCH /moderation/trust-evidence/{evidence_id}` (moderator/admin)
 - `POST /moderation/trust-evidence/manual-note` (moderator/admin)
 - `GET /restaurants/{id}/trust-events`
+
+
+Owner dashboard includes per-claim trust score, evidence status counts, and pending moderation items.
+
+`POST /owner/claims/{claim_id}/certification-evidence` accepts `certification_type` (`halal` or `kosher`) with optional file + notes and stores it as verification evidence for moderation review.
 
 `POST /restaurants/{restaurant_id}/claims` now accepts optional evidence metadata fields:
 - `claim_key` (example: `halal_status`, `kosher_status`, `allergen_handling`)

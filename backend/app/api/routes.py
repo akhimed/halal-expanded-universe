@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_current_user, require_roles
@@ -44,7 +44,7 @@ from backend.app.api.schemas import (
     VerificationDocumentResponse,
 )
 from backend.app.db.session import get_db
-from backend.app.models import OwnerClaim, TrustEvent, User
+from backend.app.models import OwnerClaim, TrustEvidence, TrustEvent, User, VerificationDocument
 from backend.app.services.auth_service import login_user, register_user
 from backend.app.services.favorite_service import add_favorite, list_favorite_restaurants, remove_favorite
 from backend.app.services.moderation_service import (
@@ -280,8 +280,58 @@ def owner_dashboard(
     db: Session = Depends(get_db),
 ) -> OwnerDashboardResponse:
     claims = list_owner_claims(db, current_user.id)
-    return OwnerDashboardResponse(
-        claims=[
+    claim_items: list[OwnerClaimDashboardItem] = []
+    pending_total = 0
+
+    for claim in claims:
+        breakdown = trust_breakdown(db, claim.restaurant, PROFILES["balanced"])
+        pending_docs = int(
+            db.scalar(
+                select(func.count(VerificationDocument.id)).where(
+                    VerificationDocument.owner_claim_id == claim.id,
+                    VerificationDocument.status == "pending",
+                )
+            )
+            or 0
+        )
+        approved_docs = int(
+            db.scalar(
+                select(func.count(VerificationDocument.id)).where(
+                    VerificationDocument.owner_claim_id == claim.id,
+                    VerificationDocument.status == "approved",
+                )
+            )
+            or 0
+        )
+        rejected_docs = int(
+            db.scalar(
+                select(func.count(VerificationDocument.id)).where(
+                    VerificationDocument.owner_claim_id == claim.id,
+                    VerificationDocument.status == "rejected",
+                )
+            )
+            or 0
+        )
+        pending_evidence = int(
+            db.scalar(
+                select(func.count(TrustEvidence.id)).where(
+                    TrustEvidence.restaurant_id == claim.restaurant_id,
+                    TrustEvidence.status == "pending",
+                )
+            )
+            or 0
+        )
+
+        pending_items: list[str] = []
+        if claim.status == "pending":
+            pending_items.append("Owner claim moderation")
+        if pending_docs > 0:
+            pending_items.append(f"{pending_docs} verification document(s)")
+        if pending_evidence > 0:
+            pending_items.append(f"{pending_evidence} trust evidence item(s)")
+        pending_total += len(pending_items)
+
+        claim_items.append(
             OwnerClaimDashboardItem(
                 id=claim.id,
                 status=claim.status,
@@ -295,10 +345,14 @@ def owner_dashboard(
                     latitude=claim.restaurant.latitude,
                     longitude=claim.restaurant.longitude,
                 ),
+                trust_score=breakdown["final_score"],
+                trust_level=breakdown["trust_level"],
+                evidence_status={"pending": pending_docs, "approved": approved_docs, "rejected": rejected_docs},
+                pending_moderation_items=pending_items,
             )
-            for claim in claims
-        ]
-    )
+        )
+
+    return OwnerDashboardResponse(claims=claim_items, pending_moderation_total=pending_total)
 
 
 @router.get("/owner/verification-documents", response_model=OwnerVerificationDocumentsResponse)
@@ -341,6 +395,39 @@ async def submit_verification_document(
         file=file,
         metadata_filename=metadata_filename,
         metadata_mime_type=metadata_mime_type,
+    )
+    return _verification_doc_model(doc)
+
+
+@router.post("/owner/claims/{claim_id}/certification-evidence", response_model=VerificationDocumentResponse)
+async def submit_certification_evidence(
+    claim_id: int,
+    certification_type: str = Form(...),
+    notes: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> VerificationDocumentResponse:
+    claim = db.scalars(select(OwnerClaim).where(OwnerClaim.id == claim_id)).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Owner claim not found")
+
+    certification_to_doc_type = {
+        "halal": "halal_certificate",
+        "kosher": "kosher_certificate",
+    }
+    if certification_type not in certification_to_doc_type:
+        raise HTTPException(status_code=400, detail="certification_type must be halal or kosher")
+
+    doc = await submit_verification_document_with_storage(
+        db,
+        current_user=current_user,
+        claim=claim,
+        document_type=certification_to_doc_type[certification_type],
+        notes=notes,
+        file=file,
+        metadata_filename=None,
+        metadata_mime_type=None,
     )
     return _verification_doc_model(doc)
 
