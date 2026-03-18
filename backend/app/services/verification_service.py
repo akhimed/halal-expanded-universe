@@ -12,6 +12,8 @@ from backend.app.services.file_storage import storage_backend
 from backend.app.services.trust_evidence_service import create_trust_evidence
 from backend.app.services.trust_event_service import create_trust_event
 
+ALLOWED_DOCUMENT_TYPES = {"business_license", "owner_id", "halal_certificate", "kosher_certificate", "other"}
+
 
 async def submit_verification_document_with_storage(
     db: Session,
@@ -26,6 +28,9 @@ async def submit_verification_document_with_storage(
 ) -> VerificationDocument:
     if claim.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot submit documents for another user claim")
+
+    if document_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported verification document type")
 
     original_filename = metadata_filename
     mime_type = metadata_mime_type

@@ -118,10 +118,15 @@ class OwnerClaimDashboardItem(BaseModel):
     notes: str | None
     created_at: datetime
     restaurant: FavoriteRestaurantSummary
+    trust_score: float
+    trust_level: Literal["high", "medium", "low"]
+    evidence_status: dict[str, int]
+    pending_moderation_items: List[str] = Field(default_factory=list)
 
 
 class OwnerDashboardResponse(BaseModel):
     claims: List[OwnerClaimDashboardItem]
+    pending_moderation_total: int
 
 
 class ModerationOwnerClaimItem(BaseModel):
